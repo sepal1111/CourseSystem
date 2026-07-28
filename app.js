@@ -10,6 +10,7 @@ import {
   parseTeacherCSV, 
   parseClassCSV, 
   parseSubjectCSV, 
+  DEFAULT_ROOMS,
   SPECIAL_ROOMS 
 } from './data.js';
 
@@ -58,6 +59,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (!state.assignments || !Array.isArray(state.assignments)) {
       state.assignments = [];
+      dirty = true;
+    }
+    if (!state.rooms || typeof state.rooms !== 'object' || Array.isArray(state.rooms)) {
+      state.rooms = { ...DEFAULT_ROOMS };
       dirty = true;
     }
     if (dirty) {
@@ -165,6 +170,16 @@ document.addEventListener("DOMContentLoaded", () => {
   if (subjectCsvBtn && subjectCsvInput) {
     subjectCsvBtn.addEventListener("click", () => subjectCsvInput.click());
     subjectCsvInput.addEventListener("change", handleSubjectCSVSelect);
+  }
+
+  // Room manual add/edit handler
+  const btnAddRoom = document.getElementById("btn-add-room");
+  if (btnAddRoom) {
+    btnAddRoom.addEventListener("click", () => openRoomModal());
+  }
+  const formRoom = document.getElementById("form-room");
+  if (formRoom) {
+    formRoom.addEventListener("submit", handleRoomFormSubmit);
   }
 
   // Subject template download button
@@ -580,35 +595,169 @@ function renderClassesAndRooms() {
   const roomTbody = document.getElementById("room-list-tbody");
   if (roomTbody) {
     roomTbody.innerHTML = "";
-    Object.keys(SPECIAL_ROOMS).forEach(key => {
-      const room = SPECIAL_ROOMS[key];
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td><strong>${room.name}</strong></td>
-        <td><span class="badge badge-info">${key}課</span></td>
-        <td>
-          <input type="number" class="input-field input-room-limit" data-room="${key}" value="${room.limit}" min="1" max="10" style="width: 80px;">
-        </td>
-        <td>全校同時段排入${key}課之班級上限</td>
-      `;
-      roomTbody.appendChild(tr);
+    const rooms = state.rooms || DEFAULT_ROOMS;
+    const keys = Object.keys(rooms);
+
+    if (keys.length === 0) {
+      roomTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 1.5rem;">目前尚無專科教室，點擊右上方「新增專科教室」建立。</td></tr>`;
+    } else {
+      keys.forEach(key => {
+        const room = rooms[key];
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><strong>${room.name}</strong></td>
+          <td><span class="badge badge-info">${key}</span></td>
+          <td>
+            <input type="number" class="input-field input-room-limit" data-room="${key}" value="${room.limit}" min="1" max="10" style="width: 80px;">
+          </td>
+          <td>全校同時段排入「${room.name}」之班級上限 (${room.limit} 班)</td>
+          <td>
+            <button class="btn btn-secondary btn-icon btn-edit-room mr-1" data-room="${key}" title="編輯教室">
+              <i data-lucide="edit-3" style="width: 14px; height: 14px;"></i>
+            </button>
+            <button class="btn btn-danger-outline btn-icon btn-delete-room" data-room="${key}" title="刪除教室">
+              <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+            </button>
+          </td>
+        `;
+        roomTbody.appendChild(tr);
+      });
+
+      // Save dynamic room changes
+      roomTbody.querySelectorAll(".input-room-limit").forEach(input => {
+        input.addEventListener("change", (e) => {
+          const roomKey = e.target.getAttribute("data-room");
+          const val = parseInt(e.target.value);
+          if (state.rooms[roomKey] && !isNaN(val) && val >= 1) {
+            state.rooms[roomKey].limit = val;
+            state.schedule = null;
+            saveAppState(state);
+            showConsoleLog(`已修改專科教室【${state.rooms[roomKey].name}】同時段容納上限為 ${val} 班，已重置現有課表。`);
+            updateGlobalStats();
+          }
+        });
+      });
+
+      // Edit room buttons
+      roomTbody.querySelectorAll(".btn-edit-room").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const roomKey = btn.getAttribute("data-room");
+          openRoomModal(roomKey);
+        });
+      });
+
+      // Delete room buttons
+      roomTbody.querySelectorAll(".btn-delete-room").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const roomKey = btn.getAttribute("data-room");
+          deleteRoom(roomKey);
+        });
+      });
+    }
+  }
+}
+
+// ----------------------------------------------------
+// ROOM MANAGEMENT FUNCTIONS
+// ----------------------------------------------------
+function openRoomModal(roomKey = null) {
+  const modal = document.getElementById("modal-room");
+  if (!modal) return;
+  const form = document.getElementById("form-room");
+  const title = document.getElementById("modal-room-title");
+  const actionInput = document.getElementById("room-form-action");
+  const oldKeyInput = document.getElementById("room-old-key");
+  const keyInput = document.getElementById("room-key");
+  const nameInput = document.getElementById("room-name");
+  const limitInput = document.getElementById("room-limit");
+
+  form.reset();
+
+  if (roomKey && state.rooms && state.rooms[roomKey]) {
+    const r = state.rooms[roomKey];
+    title.textContent = `編輯專科教室: ${r.name}`;
+    actionInput.value = "edit";
+    oldKeyInput.value = roomKey;
+    keyInput.value = roomKey;
+    nameInput.value = r.name;
+    limitInput.value = r.limit;
+  } else {
+    title.textContent = "新增專科教室";
+    actionInput.value = "create";
+    oldKeyInput.value = "";
+    keyInput.value = "";
+    nameInput.value = "";
+    limitInput.value = "1";
+  }
+
+  modal.classList.add("open");
+  safeCreateIcons();
+}
+
+function handleRoomFormSubmit(e) {
+  e.preventDefault();
+  const action = document.getElementById("room-form-action").value;
+  const oldKey = document.getElementById("room-old-key").value;
+  const key = document.getElementById("room-key").value.trim();
+  const name = document.getElementById("room-name").value.trim();
+  const limit = parseInt(document.getElementById("room-limit").value) || 1;
+
+  if (!key || !name) return;
+
+  if (!state.rooms) state.rooms = {};
+
+  if (action === "create") {
+    if (state.rooms[key]) {
+      alert(`教室代碼/簡稱「${key}」已存在！請改用其他代碼。`);
+      return;
+    }
+    state.rooms[key] = { name, limit };
+    showConsoleLog(`已成功新增專科教室【${name}】(${key})，容量上限: ${limit} 班`);
+  } else {
+    if (oldKey !== key && state.rooms[key]) {
+      alert(`教室代碼/簡稱「${key}」已被其他教室使用！`);
+      return;
+    }
+    if (oldKey !== key) {
+      delete state.rooms[oldKey];
+      state.subjects.forEach(s => {
+        if (s.requiresRoom === oldKey) s.requiresRoom = key;
+      });
+      state.assignments.forEach(a => {
+        if (a.requiresRoom === oldKey) a.requiresRoom = key;
+      });
+    }
+    state.rooms[key] = { name, limit };
+    showConsoleLog(`已更新專科教室設定【${name}】(${key})，容量上限: ${limit} 班`);
+  }
+
+  state.schedule = null;
+  saveAppState(state);
+  closeAllModals();
+  renderClassesAndRooms();
+  renderSubjects();
+  showConsoleLog("專科教室設定已更新。");
+}
+
+function deleteRoom(key) {
+  if (!state.rooms || !state.rooms[key]) return;
+  const rName = state.rooms[key].name;
+
+  if (confirm(`確定要刪除專科教室【${rName}】(${key}) 嗎？連動需要該教室的科目設定將一併改為「不需要專科教室」。`)) {
+    delete state.rooms[key];
+    
+    state.subjects.forEach(s => {
+      if (s.requiresRoom === key) s.requiresRoom = null;
+    });
+    state.assignments.forEach(a => {
+      if (a.requiresRoom === key) a.requiresRoom = null;
     });
 
-    // Save dynamic room changes
-    roomTbody.querySelectorAll(".input-room-limit").forEach(input => {
-      input.addEventListener("change", (e) => {
-        const roomKey = e.target.getAttribute("data-room");
-        const val = parseInt(e.target.value);
-        if (SPECIAL_ROOMS[roomKey] && !isNaN(val) && val >= 1) {
-          SPECIAL_ROOMS[roomKey].limit = val;
-          // Clear current schedule because rules changed
-          state.schedule = null;
-          saveAppState(state);
-          showConsoleLog(`已修改專科教室【${SPECIAL_ROOMS[roomKey].name}】同時段容納上限為 ${val} 班，已重置現有課表。`);
-          updateGlobalStats();
-        }
-      });
-    });
+    state.schedule = null;
+    saveAppState(state);
+    renderClassesAndRooms();
+    renderSubjects();
+    showConsoleLog(`已刪除專科教室【${rName}】(${key})。`);
   }
 }
 
@@ -1161,8 +1310,9 @@ function renderClassAssignments() {
         : '<span class="badge badge-danger">專長不符</span>';
     }
 
+    const roomNameStr = (state.rooms || SPECIAL_ROOMS)[tmpl.requiresRoom]?.name || tmpl.requiresRoom;
     const roomText = tmpl.requiresRoom 
-      ? `<span class="badge badge-info">${SPECIAL_ROOMS[tmpl.requiresRoom]?.name}</span>` 
+      ? `<span class="badge badge-info">${roomNameStr}</span>` 
       : '<span style="color: var(--text-secondary);">無</span>';
 
     const roleLabels = { director: "主任", leader: "組長", homeroom: "導師", subject: "科任", hourly: "鐘點" };
@@ -1503,8 +1653,9 @@ function renderViewersControls() {
     });
   } else if (dimension === "room") {
     label.textContent = "選擇教室：";
-    Object.keys(SPECIAL_ROOMS).forEach(key => {
-      select.innerHTML += `<option value="${key}">${SPECIAL_ROOMS[key].name}</option>`;
+    const rooms = state.rooms || DEFAULT_ROOMS;
+    Object.keys(rooms).forEach(key => {
+      select.innerHTML += `<option value="${key}">${rooms[key].name || key}</option>`;
     });
   }
 
@@ -1636,7 +1787,8 @@ function renderClassCell(td, classId, day, period) {
   const cell = state.schedule[classId]?.[`${day}-${period}`];
   if (cell) {
     const teacher = state.teachers.find(t => t.id === cell.teacherId);
-    const roomBadge = cell.requiresRoom ? `<span class="timetable-card-room">${SPECIAL_ROOMS[cell.requiresRoom]?.name}</span>` : '';
+    const roomNameStr = cell.requiresRoom ? ((state.rooms || SPECIAL_ROOMS)[cell.requiresRoom]?.name || cell.requiresRoom) : '';
+    const roomBadge = cell.requiresRoom ? `<span class="timetable-card-room">${roomNameStr}</span>` : '';
     
     td.innerHTML = `
       <div class="timetable-card" draggable="true" data-subject="${cell.subject}" data-teacher-id="${cell.teacherId}" data-room="${cell.requiresRoom || ''}">
@@ -1680,7 +1832,8 @@ function renderTeacherCell(td, teacherId, day, period) {
   }
 
   if (assignedClassId) {
-    const roomBadge = room ? `<span class="timetable-card-room">${SPECIAL_ROOMS[room]?.name}</span>` : '';
+    const roomNameStr = room ? ((state.rooms || SPECIAL_ROOMS)[room]?.name || room) : '';
+    const roomBadge = room ? `<span class="timetable-card-room">${roomNameStr}</span>` : '';
     td.innerHTML = `
       <div class="timetable-card" style="border-left-color: var(--success-color); background-color: var(--success-bg);">
         <span class="timetable-card-subject">${assignedClassId} 班</span>
@@ -1984,7 +2137,8 @@ function exportTimetableToExcel() {
           const cell = state.schedule[cls.id]?.[`${day}-${p.num}`];
           if (cell) {
             const t = state.teachers.find(x => x.id === cell.teacherId);
-            const roomName = cell.requiresRoom ? ` [${SPECIAL_ROOMS[cell.requiresRoom]?.name}]` : '';
+            const rName = (state.rooms || SPECIAL_ROOMS)[cell.requiresRoom]?.name || cell.requiresRoom;
+            const roomName = cell.requiresRoom ? ` [${rName}]` : '';
             row.push(`${cell.subject}\n(${t ? t.name : cell.teacherId})${roomName}`);
           } else {
             row.push("");
@@ -2151,6 +2305,17 @@ function deleteSubject(id) {
 function openSubjectModal() {
   const modal = document.getElementById("modal-subject");
   document.getElementById("form-subject").reset();
+
+  const roomSelect = document.getElementById("subject-room");
+  if (roomSelect) {
+    roomSelect.innerHTML = `<option value="">-- 不需要 --</option>`;
+    const rooms = state.rooms || DEFAULT_ROOMS;
+    Object.keys(rooms).forEach(key => {
+      const room = rooms[key];
+      roomSelect.innerHTML += `<option value="${key}">${room.name} (${key})</option>`;
+    });
+  }
+
   modal.classList.add("open");
 }
 

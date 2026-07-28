@@ -301,18 +301,23 @@
               </div>
 
               <div class="panel glass">
-                <div class="panel-header">
+                <div class="panel-header flex-justify-between">
                   <h3><i data-lucide="map-pin" class="panel-icon"></i> 專科教室與容納上限</h3>
+                  <button id="btn-add-room" class="btn btn-primary btn-sm btn-icon-text">
+                    <i data-lucide="plus"></i>
+                    <span>新增專科教室</span>
+                  </button>
                 </div>
                 <div class="panel-body">
-                  <p class="text-secondary mb-4">設定各專科教室在同一時段能容納的最大班級數，排課引擎會自動進行衝突檢查避免超載。</p>
+                  <p class="text-secondary mb-4">自訂全校專科教室（如電腦教室、體育館、自然實驗室等）及同時段可容納的最大班級數，排課引擎會自動防範超載。</p>
                   <table class="table">
                     <thead>
                       <tr>
-                        <th>教室類型</th>
-                        <th>代表科目</th>
+                        <th>教室名稱</th>
+                        <th>代碼 / 簡稱</th>
                         <th>同時段上限 (班級數)</th>
                         <th>說明</th>
+                        <th>操作</th>
                       </tr>
                     </thead>
                     <tbody id="room-list-tbody">
@@ -821,6 +826,36 @@
       <div class="modal-footer">
         <button class="btn btn-secondary btn-close-modal">取消</button>
         <button id="btn-subject-csv-confirm-save" class="btn btn-primary">確認匯入</button>
+      </div>
+    </div>
+  <!-- 6. Room Modal -->
+  <div class="modal" id="modal-room">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <h3 id="modal-room-title">新增專科教室</h3>
+        <button class="btn-close-modal"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <form id="form-room">
+          <input type="hidden" id="room-form-action" value="create">
+          <input type="hidden" id="room-old-key" value="">
+          <div class="form-group mb-4">
+            <label class="form-label" for="room-key">代碼 / 簡稱 (英文或中文簡稱，用於科目與配課選單)</label>
+            <input type="text" id="room-key" class="input-field" required placeholder="例如: 電腦、體育、音樂、美勞、自然">
+          </div>
+          <div class="form-group mb-4">
+            <label class="form-label" for="room-name">教室全稱</label>
+            <input type="text" id="room-name" class="input-field" required placeholder="例如: 電腦教室、體育館、自然實驗室">
+          </div>
+          <div class="form-group mb-4">
+            <label class="form-label" for="room-limit">同時段容納上限 (班級數)</label>
+            <input type="number" id="room-limit" class="input-field" required min="1" max="10" value="1" placeholder="1">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-close-modal">取消</button>
+        <button type="submit" form="form-room" class="btn btn-primary">儲存教室設定</button>
       </div>
     </div>
   </div>

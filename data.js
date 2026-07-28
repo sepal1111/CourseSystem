@@ -22,12 +22,13 @@ export const DEFAULT_CLASSES = [
 ];
 
 // Special Room limits: e.g. computer lab limit is 1 class, Gym is 2 classes at the same time
-export const SPECIAL_ROOMS = {
+export const DEFAULT_ROOMS = {
   "電腦": { name: "電腦教室", limit: 1 },
   "體育": { name: "體育館", limit: 2 },
   "音樂": { name: "音樂教室", limit: 1 },
   "美勞": { name: "美勞教室", limit: 1 }
 };
+export const SPECIAL_ROOMS = DEFAULT_ROOMS;
 
 // Default subjects per grade level (台湾國小課程大綱基礎)
 export const DEFAULT_SUBJECTS = [
@@ -412,6 +413,7 @@ export function getInitialState() {
     classes: [],
     subjects: [],
     assignments: [],
+    rooms: { ...DEFAULT_ROOMS },
     schedule: null
   };
 }

@@ -1,3 +1,24 @@
+## [2026-07-28 20:25:00] - 實作專科教室自訂管理（新增、編輯、刪除與動態綁定）
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 專科教室也要讓使用者自訂
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   將專科教室資料納入 `state.rooms` 的持久化管理中，使其可透過 JSON 匯出/匯入。
+    *   在 `index.html` 中為「專科教室與容納上限」區塊新增「新增專科教室」按鈕與彈出視窗對話框 (`#modal-room`)，支援自訂教室代碼、全名與同時段班級容量上限。
+    *   在 `app.js` 中實作專科教室的表格動態渲染、手動新增、編輯上限、刪除教室（並連動清除相關科目的專科教室綁定）之處理邏輯。
+    *   動態關聯科目設定 Modal (`#subject-room`) 的下拉選單，使其與 `state.rooms` 的內容同步。
+    *   重構 `scheduler.js` 的排課演算法與手動拖曳驗證常式，改為動態讀取傳入的 `state.rooms` 教室限制進行衝突推演。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `data.js`: 新增 `DEFAULT_ROOMS`，並將 `rooms` 納入初始狀態。
+    *   `[MODIFIED]` `scheduler.js`: 支援傳入自訂 `rooms` 物件進行排課約束與拖拉移動校驗。
+    *   `[MODIFIED]` `index.html`: 新增專科教室新增按鈕、表格欄位與專科教室彈出視窗對話框。
+    *   `[MODIFIED]` `app.js`: 實作專科教室增刪改邏輯，動態更新科目選單，並在排課引擎中傳遞 `state.rooms`。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
 ## [2026-07-28 20:11:00] - 移除預設示範資料並強化 JSON 紀錄匯出/匯入功能
 
 *   **使用者提示詞 / 需求 (User Prompt):**

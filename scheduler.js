@@ -12,6 +12,7 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
   const maxBacktracks = params.maxBacktracks || 50000;
   const preferMorningCore = params.preferMorningCore !== false;
   const preferConsecutiveSpecial = params.preferConsecutiveSpecial !== false;
+  const roomsMap = params.rooms || SPECIAL_ROOMS;
 
   logCallback("===============================");
   logCallback(`[Engine] 啟動自動排課引擎...`);
@@ -70,7 +71,7 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
 
   // Structure: roomUsage[roomType][day][period] -> count
   const roomUsage = {};
-  Object.keys(SPECIAL_ROOMS).forEach(roomType => {
+  Object.keys(roomsMap).forEach(roomType => {
     roomUsage[roomType] = {};
     for (let day = 1; day <= 5; day++) {
       roomUsage[roomType][day] = {};
@@ -91,7 +92,7 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
     if (lesson.requiresRoom) {
       difficulty += 150;
       // Rooms with lower capacity limits are harder
-      const limit = SPECIAL_ROOMS[lesson.requiresRoom]?.limit || 1;
+      const limit = roomsMap[lesson.requiresRoom]?.limit || 1;
       difficulty += (5 - limit) * 20;
     }
 
@@ -175,8 +176,8 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
 
     // Constraint 5: Special room limit exceeded?
     if (requiresRoom) {
-      const currentUsage = roomUsage[requiresRoom][day][period];
-      const maxLimit = SPECIAL_ROOMS[requiresRoom]?.limit || 1;
+      const currentUsage = roomUsage[requiresRoom] ? (roomUsage[requiresRoom][day][period] || 0) : 0;
+      const maxLimit = roomsMap[requiresRoom]?.limit || 1;
       if (currentUsage >= maxLimit) return false;
     }
 
@@ -383,7 +384,9 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
  * Validates a single manual swap/move in the schedule.
  * Returns { valid: boolean, reason: string | null }
  */
-export function validateManualMove(schedule, teachers, classId, fromDay, fromPeriod, toDay, toPeriod, lesson, logCallback = console.log) {
+export function validateManualMove(schedule, teachers, classId, fromDay, fromPeriod, toDay, toPeriod, lesson, logCallback = console.log, customRooms = null) {
+  const roomsMap = customRooms || SPECIAL_ROOMS;
+
   // 1. Check class level constraints (afternoon limits)
   // Determine grade
   const gradeStr = classId.substring(0, 1);
@@ -425,7 +428,8 @@ export function validateManualMove(schedule, teachers, classId, fromDay, fromPer
 
   // 4. Check Special Room constraints
   if (lesson.requiresRoom) {
-    const limit = SPECIAL_ROOMS[lesson.requiresRoom]?.limit || 1;
+    const limit = roomsMap[lesson.requiresRoom]?.limit || 1;
+    const roomName = roomsMap[lesson.requiresRoom]?.name || lesson.requiresRoom;
     let roomUsageCount = 0;
     
     for (const cId in schedule) {
@@ -439,7 +443,7 @@ export function validateManualMove(schedule, teachers, classId, fromDay, fromPer
     if (roomUsageCount >= limit) {
       return { 
         valid: false, 
-        reason: `專科教室「${SPECIAL_ROOMS[lesson.requiresRoom]?.name}」在該時段的使用班級已達上限 (${limit} 班)` 
+        reason: `專科教室「${roomName}」在該時段的使用班級已達上限 (${limit} 班)` 
       };
     }
   }
