@@ -1,3 +1,22 @@
+## [2026-07-28 20:11:00] - 移除預設示範資料並強化 JSON 紀錄匯出/匯入功能
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 系統中都不要有任何的班級、教師、科目資料，資料都站存在瀏覽器中，加入可以把瀏覽器中的紀錄已josn檔案匯出
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在 `data.js` 中重構 `getInitialState()`，將 `teachers`, `classes`, `subjects`, `assignments` 全數初始化為空陣列 `[]`，移除預設的示範資料。
+    *   在 `app.js` 中調整系統初始化邏輯，使新使用者開啟系統時從零開始，所有資料完全由使用者自行手動建立或透過 CSV/JSON 匯入，並完全暫存於瀏覽器的 `localStorage` 中。
+    *   在 `index.html` 的頂部控制列顯著標示「匯出 JSON 紀錄」與「匯入 JSON 紀錄」按鈕，並簡化清空/重置按鈕邏輯。
+    *   在 `app.js` 中重構 `exportSystemData()` 函式，支援將 `localStorage` 中的全校教師、班級、科目設定、配課與排課結果完整備份匯出為 JSON 檔案。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `data.js`: 將 `getInitialState` 改為純淨空資料狀態。
+    *   `[MODIFIED]` `index.html`: 更新頂部控制列按鈕標示，突顯 JSON 匯出/匯入。
+    *   `[MODIFIED]` `app.js`: 調整載入與匯出 JSON 邏輯，補齊空資料狀態下的 UI 提示。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
 ## [2026-07-28 20:04:00] - [Self-Correction / Bugfix] 修正 app.js 重複宣告 targetHours 語法錯誤
 
 *   **使用者提示詞 / 需求 (User Prompt):**

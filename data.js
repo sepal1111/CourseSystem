@@ -407,27 +407,11 @@ export function loadAppState() {
 }
 
 export function getInitialState() {
-  const subjects = [...DEFAULT_SUBJECTS];
-  const assignments = [];
-  DEFAULT_CLASSES.forEach(c => {
-    const classSubjects = subjects.filter(s => s.grade === c.grade);
-    classSubjects.forEach(tmpl => {
-      assignments.push({
-        id: `${c.id}-${tmpl.subject}`,
-        classId: c.id,
-        subject: tmpl.subject,
-        weeklyHours: tmpl.weeklyHours,
-        teacherId: "",
-        requiresRoom: tmpl.requiresRoom
-      });
-    });
-  });
-
   return {
-    teachers: [...DEFAULT_TEACHERS],
-    classes: [...DEFAULT_CLASSES],
-    subjects: subjects,
-    assignments: assignments,
+    teachers: [],
+    classes: [],
+    subjects: [],
+    assignments: [],
     schedule: null
   };
 }

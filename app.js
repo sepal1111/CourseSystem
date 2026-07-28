@@ -10,7 +10,6 @@ import {
   parseTeacherCSV, 
   parseClassCSV, 
   parseSubjectCSV, 
-  DEFAULT_SUBJECTS, 
   SPECIAL_ROOMS 
 } from './data.js';
 
@@ -45,27 +44,27 @@ document.addEventListener("DOMContentLoaded", () => {
   if (savedState) {
     state = savedState;
     let dirty = false;
-    const initial = getInitialState();
-    if (!state.teachers || !Array.isArray(state.teachers) || state.teachers.length === 0) {
-      state.teachers = initial.teachers;
+    if (!state.teachers || !Array.isArray(state.teachers)) {
+      state.teachers = [];
       dirty = true;
     }
-    if (!state.classes || !Array.isArray(state.classes) || state.classes.length === 0) {
-      state.classes = initial.classes;
+    if (!state.classes || !Array.isArray(state.classes)) {
+      state.classes = [];
       dirty = true;
     }
-    if (!state.subjects || !Array.isArray(state.subjects) || state.subjects.length === 0) {
-      state.subjects = initial.subjects;
+    if (!state.subjects || !Array.isArray(state.subjects)) {
+      state.subjects = [];
       dirty = true;
     }
-    if (!state.assignments || !Array.isArray(state.assignments) || state.assignments.length === 0) {
-      state.assignments = initial.assignments;
+    if (!state.assignments || !Array.isArray(state.assignments)) {
+      state.assignments = [];
       dirty = true;
     }
     if (dirty) {
       saveAppState(state);
     }
   } else {
+    state = getInitialState();
     saveAppState(state);
   }
 
@@ -108,27 +107,12 @@ document.addEventListener("DOMContentLoaded", () => {
   importFileBtn.addEventListener("click", () => importFileInput.click());
   importFileInput.addEventListener("change", importSystemData);
 
-  document.getElementById("btn-reset-system").addEventListener("click", () => {
-    if (confirm("確定要重置系統資料嗎？這將會清除所有自訂配課與排課結果，恢復為系統預設值。")) {
+  document.getElementById("btn-clear-all-data").addEventListener("click", () => {
+    if (confirm("確定要清空瀏覽器暫存的所有資料嗎？這將會清除全校的所有教師、班級、科目設定與排課表紀錄！")) {
       state = getInitialState();
       saveAppState(state);
       renderCurrentTab();
-      showConsoleLog("系統資料已重置為初始狀態。");
-    }
-  });
-
-  document.getElementById("btn-clear-all-data").addEventListener("click", () => {
-    if (confirm("確定要清空所有資料嗎？這將會清除全校的所有教師、班級、配課與排課表！後續需要由您自行建立或匯入。")) {
-      state = {
-        teachers: [],
-        classes: [],
-        subjects: [],
-        assignments: [],
-        schedule: null
-      };
-      saveAppState(state);
-      renderCurrentTab();
-      showConsoleLog("系統資料已全部清空。");
+      showConsoleLog("已清空瀏覽器中的所有暫存紀錄。");
     }
   });
 
@@ -1907,14 +1891,17 @@ function logDevHistory(userPrompt, strategy, action, file, status) {
 // EXPORT SYSTEM STATE & TIMETABLE EXCEL EXPORTER
 // ----------------------------------------------------
 function exportSystemData() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const jsonContent = JSON.stringify(state, null, 2);
+  const blob = new Blob([jsonContent], { type: "application/json;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.setAttribute("download", `智慧排課系統資料_${new Date().toISOString().slice(0,10)}.json`);
+  a.setAttribute("download", `智慧排課系統暫存紀錄_${new Date().toISOString().slice(0,10)}.json`);
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showConsoleLog("成功將瀏覽器中的全校紀錄匯出為 JSON 檔案！");
 }
 
 function importSystemData(e) {
@@ -1925,19 +1912,25 @@ function importSystemData(e) {
   reader.onload = function(evt) {
     try {
       const imported = JSON.parse(evt.target.result);
-      if (imported.teachers && imported.classes && imported.assignments) {
-        state = imported;
-        if (!state.subjects) {
-          state.subjects = [...DEFAULT_SUBJECTS];
-        }
+      if (Array.isArray(imported.teachers) && Array.isArray(imported.classes)) {
+        state = {
+          teachers: imported.teachers || [],
+          classes: imported.classes || [],
+          subjects: imported.subjects || [],
+          assignments: imported.assignments || [],
+          schedule: imported.schedule || null
+        };
         saveAppState(state);
         renderCurrentTab();
-        alert("系統資料匯入成功！");
+        alert("系統 JSON 紀錄資料匯入成功！");
+        showConsoleLog("已成功載入外置 JSON 紀錄資料。");
       } else {
-        alert("匯入的檔案結構不符！必須包含 teachers, classes 與 assignments 欄位。");
+        alert("匯入的檔案結構不符！需為包含 teachers 與 classes 陣列的智慧排課 JSON 紀錄檔。");
       }
     } catch (err) {
       alert("無法解析 JSON 檔案，請確認檔案格式是否正確。");
+    } finally {
+      e.target.value = "";
     }
   };
   reader.readAsText(file, "UTF-8");

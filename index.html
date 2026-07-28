@@ -66,22 +66,18 @@
           <p id="current-tab-desc">全校排課狀態、教師配課負擔與核心指標預覽</p>
         </div>
         <div class="header-actions">
-          <button id="btn-export-data" class="btn btn-secondary btn-icon-text">
+          <button id="btn-export-data" class="btn btn-primary btn-icon-text" title="將瀏覽器暫存的所有資料匯出為 JSON 檔案">
             <i data-lucide="download"></i>
-            <span>導出系統資料</span>
+            <span>匯出 JSON 紀錄</span>
           </button>
-          <button id="btn-import-data" class="btn btn-secondary btn-icon-text">
+          <button id="btn-import-data" class="btn btn-secondary btn-icon-text" title="匯入備份的 JSON 紀錄檔案">
             <i data-lucide="upload"></i>
-            <span>匯入系統資料</span>
+            <span>匯入 JSON 紀錄</span>
           </button>
           <input type="file" id="import-data-file" accept=".json" style="display: none;">
-          <button id="btn-reset-system" class="btn btn-secondary btn-icon-text">
-            <i data-lucide="rotate-ccw"></i>
-            <span>重置預設值</span>
-          </button>
-          <button id="btn-clear-all-data" class="btn btn-danger btn-icon-text">
+          <button id="btn-clear-all-data" class="btn btn-danger-outline btn-icon-text" title="清空瀏覽器暫存的所有班級、教師與科目資料">
             <i data-lucide="trash-2"></i>
-            <span>清空所有資料</span>
+            <span>清空所有紀錄</span>
           </button>
         </div>
       </header>
