@@ -9,7 +9,7 @@ import { SPECIAL_ROOMS } from './data.js';
  * Runs Heuristic Backtracking CSP solver.
  */
 export function runScheduler(teachers, classes, assignments, params = {}, logCallback = console.log) {
-  const maxBacktracks = params.maxBacktracks || 50000;
+  const maxBacktracks = params.maxBacktracks || 500000;
   const preferMorningCore = params.preferMorningCore !== false;
   const preferConsecutiveSpecial = params.preferConsecutiveSpecial !== false;
   const roomsMap = params.rooms || SPECIAL_ROOMS;
@@ -17,12 +17,13 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
   logCallback("===============================");
   logCallback(`[Engine] 啟動自動排課引擎...`);
   logCallback(`[Engine] 總班級數: ${classes.length}，總教師數: ${teachers.length}`);
-  logCallback(`[Engine] 待排課節數: ${assignments.reduce((sum, a) => sum + a.weeklyHours, 0)} 節`);
+  const validAssignments = assignments.filter(a => Boolean(a.teacherId));
+  logCallback(`[Engine] 待排課節數: ${validAssignments.reduce((sum, a) => sum + a.weeklyHours, 0)} 節 (排除未指派教師之科目)`);
   logCallback(`[Engine] 最大回溯次數限制: ${maxBacktracks}`);
   
   // 1. Convert weekly CourseAssignments into a list of individual Lesson tokens
   const lessons = [];
-  assignments.forEach(assign => {
+  validAssignments.forEach(assign => {
     for (let i = 0; i < assign.weeklyHours; i++) {
       lessons.push({
         id: `${assign.classId}-${assign.subject}-${assign.teacherId}-${i}`,
@@ -71,14 +72,24 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
 
   // Structure: roomUsage[roomType][day][period] -> count
   const roomUsage = {};
-  Object.keys(roomsMap).forEach(roomType => {
-    roomUsage[roomType] = {};
-    for (let day = 1; day <= 5; day++) {
-      roomUsage[roomType][day] = {};
-      for (let period = 1; period <= 7; period++) {
-        roomUsage[roomType][day][period] = 0;
+
+  function initRoom(roomType) {
+    if (!roomType) return;
+    if (!roomUsage[roomType]) {
+      roomUsage[roomType] = {};
+      for (let day = 1; day <= 5; day++) {
+        roomUsage[roomType][day] = {};
+        for (let period = 1; period <= 7; period++) {
+          roomUsage[roomType][day][period] = 0;
+        }
       }
     }
+  }
+
+  // Pre-initialize roomUsage for roomsMap and all lesson requirements
+  Object.keys(roomsMap || {}).forEach(roomType => initRoom(roomType));
+  lessons.forEach(l => {
+    if (l.requiresRoom) initRoom(l.requiresRoom);
   });
 
   // 4. Sort variables (lessons) based on heuristics (MRV & constraint weight)
@@ -90,31 +101,35 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
 
     // A: Special room requirements (high risk of conflict)
     if (lesson.requiresRoom) {
-      difficulty += 150;
-      // Rooms with lower capacity limits are harder
+      difficulty += 350;
       const limit = roomsMap[lesson.requiresRoom]?.limit || 1;
-      difficulty += (5 - limit) * 20;
+      difficulty += (5 - limit) * 40;
     }
 
     // B: Classes with fewer total available slots (Low grades have 23, Mid has 29, High has 32)
     if (c.grade <= 2) {
-      difficulty += 80; // Low grade
+      difficulty += 250; // Low grade (only 23 slots available)
     } else if (c.grade <= 4) {
-      difficulty += 30; // Mid grade
+      difficulty += 100; // Mid grade (only 29 slots available)
     }
 
-    // C: Teachers with high load relative to their role or busy slots
+    // C: Teachers with busy slots or high assigned load
     if (t) {
-      difficulty += t.busySlots.length * 15;
+      const busyCount = (t.busySlots || []).length;
+      difficulty += busyCount * 80;
       
-      // If teacher is very busy (homeroom 16h, subject 20h)
-      if (t.role === 'subject') difficulty += 40;
-      if (t.role === 'homeroom') difficulty += 25;
+      // Prioritize teachers with higher workload
+      difficulty += (t.assignedHours || 0) * 10;
+      
+      // Prioritize shared teachers (non-homeroom) because they cross-constrain multiple classes
+      if (t.role !== 'homeroom') {
+        difficulty += 150;
+      }
     }
 
-    // D: Double period potential - if subject is natural science, art, computer, etc.
-    if (["自然", "美勞", "電腦", "音樂"].includes(lesson.subject)) {
-      difficulty += 10;
+    // D: Special subjects (Computer, Science, Music, Art)
+    if (["自然", "美勞", "電腦", "音樂", "藝(音)", "藝(美)", "彈(資)", "彈(英)", "英文", "科技"].includes(lesson.subject)) {
+      difficulty += 30;
     }
 
     lesson.difficulty = difficulty;
@@ -128,9 +143,37 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
     logCallback(`  ${i+1}. 班級 ${l.classId} - 科目 ${l.subject} - 教師 ${teacherMap.get(l.teacherId)?.name} (難度得分: ${l.difficulty.toFixed(0)})`);
   });
 
-  // 5. Backtracking solver core variables
+  // 0. Physical Impossibility Pre-Check: Teacher hours > 35
+  const teacherTotalHours = {};
+  validAssignments.forEach(assign => {
+    teacherTotalHours[assign.teacherId] = (teacherTotalHours[assign.teacherId] || 0) + assign.weeklyHours;
+  });
+
+  const impossibleTeachers = [];
+  Object.keys(teacherTotalHours).forEach(tId => {
+    if (teacherTotalHours[tId] > 35) {
+      const tObj = teachers.find(t => t.id === tId);
+      impossibleTeachers.push({
+        id: tId,
+        name: tObj ? tObj.name : tId,
+        assigned: teacherTotalHours[tId]
+      });
+    }
+  });
+
+  if (impossibleTeachers.length > 0) {
+    logCallback(`[Engine] ❌ 發現實體不可能排課條件！以下教師配課總節數超出單週最大可用時段 (35 節)：`);
+    impossibleTeachers.forEach(t => {
+      logCallback(`  - 教師: ${t.name} (已被指派 ${t.assigned} 節 / 每週上限 35 節)`);
+    });
+    logCallback(`[Engine] 💡 提示：單一教師無法在同一時段同時於兩個班級上課。請前往「線上互動配課」，將部份班級科目分散指派給其他兼任/鐘點教師。`);
+    return null;
+  }
+
+  // 5. Backtracking DFS solver with Symmetry Breaking
   let backtrackCount = 0;
   let startTime = performance.now();
+  const lastSlotMap = {};
 
   /**
    * Helper to check if a class slot is active based on grade level (Hard constraint)
@@ -179,6 +222,30 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
       const currentUsage = roomUsage[requiresRoom] ? (roomUsage[requiresRoom][day][period] || 0) : 0;
       const maxLimit = roomsMap[requiresRoom]?.limit || 1;
       if (currentUsage >= maxLimit) return false;
+    }
+
+    // Constraint 6: Strict limit of max 2 periods of the same subject on the same day
+    let subjectCountToday = 0;
+    for (let p = 1; p <= 7; p++) {
+      const scheduled = classSchedule[classId][day][p];
+      if (scheduled && scheduled.subject === lesson.subject) {
+        subjectCountToday++;
+      }
+    }
+    if (subjectCountToday >= 2) return false;
+
+    // Constraint 7: High Grade (5, 6) 彈(英) and 英文 cannot be on the same day
+    const cls = classMap.get(classId);
+    if (cls && cls.grade >= 5) {
+      if (lesson.subject === "彈(英)" || lesson.subject === "英文") {
+        const conflictSubject = lesson.subject === "彈(英)" ? "英文" : "彈(英)";
+        for (let p = 1; p <= 7; p++) {
+          const scheduled = classSchedule[classId][day][p];
+          if (scheduled && scheduled.subject === conflictSubject) {
+            return false;
+          }
+        }
+      }
     }
 
     return true;
@@ -233,25 +300,51 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
       // (Unless we want consecutive double periods)
       let subjectCountOnDay = 0;
       let consecutivePossible = false;
+      let alreadyScheduledDaysCount = 0;
 
-      for (let p = 1; p <= 7; p++) {
-        const scheduled = classSchedule[lesson.classId][day][p];
-        if (scheduled && scheduled.subject === lesson.subject) {
-          subjectCountOnDay++;
-          // Check if it's consecutive to candidate period
-          if (Math.abs(p - period) === 1) {
-            consecutivePossible = true;
+      for (let d = 1; d <= 5; d++) {
+        let hasSubjectOnD = false;
+        for (let p = 1; p <= 7; p++) {
+          const scheduled = classSchedule[lesson.classId][d][p];
+          if (scheduled && scheduled.subject === lesson.subject) {
+            hasSubjectOnD = true;
+            if (d === day) {
+              subjectCountOnDay++;
+              // Check if it's consecutive to candidate period
+              if (Math.abs(p - period) === 1) {
+                consecutivePossible = true;
+              }
+            }
           }
         }
+        if (hasSubjectOnD) alreadyScheduledDaysCount++;
       }
 
-      const isConsecutiveSubject = ["美勞", "自然", "電腦", "音樂"].includes(lesson.subject);
+      let isConsecutiveSubject = ["社會", "美勞", "自然", "電腦", "音樂", "藝(音)", "藝(美)", "彈(資)", "科技"].includes(lesson.subject);
+      const cls = classMap.get(lesson.classId);
+      if (cls && cls.grade >= 5 && lesson.subject === "英文") {
+        isConsecutiveSubject = true;
+      }
 
-      if (subjectCountOnDay > 0) {
-        if (preferConsecutiveSpecial && isConsecutiveSubject && consecutivePossible) {
-          score += 60; // Highly encourage consecutive special lessons (double periods)
+      if (isConsecutiveSubject) {
+        if (subjectCountOnDay > 0) {
+          if (preferConsecutiveSpecial && consecutivePossible) {
+            score += 100; // Highly encourage consecutive special lessons (double periods)
+          } else {
+            score -= 100; // Strongly penalize splitting the same subject on the same day if not consecutive
+          }
         } else {
-          score -= 80; // Strongly penalize splitting the same subject on the same day
+          // If it's a new day, penalize splitting if they should be consecutive
+          if (lesson.weeklyHours === 2 && alreadyScheduledDaysCount >= 1) {
+             score -= 60; // Penalize splitting a 2-hour consecutive class across different days
+          }
+          if (lesson.weeklyHours === 3 && alreadyScheduledDaysCount >= 2) {
+             score -= 60; // Try not to split 3-hour class into 3 separate days
+          }
+        }
+      } else {
+        if (subjectCountOnDay > 0) {
+          score -= 80; // Strongly penalize same day for non-consecutive subjects
         }
       }
 
@@ -291,17 +384,24 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
 
     const lesson = lessons[lessonIndex];
     const candidateSlots = getSortedSlotsForLesson(lesson);
+    const minSlotVal = (lesson.lessonIndex > 0 && lastSlotMap[lesson.assignmentId]) ? lastSlotMap[lesson.assignmentId] : 0;
 
     for (let i = 0; i < candidateSlots.length; i++) {
       const { day, period } = candidateSlots[i];
+      const slotVal = day * 10 + period;
+      if (slotVal <= minSlotVal) continue; // Symmetry Breaking for identical tokens of same assignment
 
       if (isValid(lesson, day, period)) {
         // Apply assignment
         classSchedule[lesson.classId][day][period] = lesson;
         teacherSchedule[lesson.teacherId][day][period] = lesson.classId;
         if (lesson.requiresRoom) {
+          initRoom(lesson.requiresRoom);
           roomUsage[lesson.requiresRoom][day][period]++;
         }
+
+        const prevSlotVal = lastSlotMap[lesson.assignmentId];
+        lastSlotMap[lesson.assignmentId] = slotVal;
 
         // Recurse to next lesson
         try {
@@ -316,8 +416,10 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
         classSchedule[lesson.classId][day][period] = null;
         teacherSchedule[lesson.teacherId][day][period] = null;
         if (lesson.requiresRoom) {
+          initRoom(lesson.requiresRoom);
           roomUsage[lesson.requiresRoom][day][period]--;
         }
+        lastSlotMap[lesson.assignmentId] = prevSlotVal;
       }
     }
 
@@ -445,6 +547,30 @@ export function validateManualMove(schedule, teachers, classId, fromDay, fromPer
         valid: false, 
         reason: `專科教室「${roomName}」在該時段的使用班級已達上限 (${limit} 班)` 
       };
+    }
+  }
+
+  // 5. Check same day constraints
+  let subjectCountToday = 0;
+  for (let p = 1; p <= 7; p++) {
+    if (p === toPeriod) continue;
+    const targetCell = schedule[classId][`${toDay}-${p}`];
+    if (targetCell && targetCell.subject === lesson.subject) {
+      subjectCountToday++;
+    }
+  }
+  if (subjectCountToday >= 2) {
+    return { valid: false, reason: `同一天不可排超過兩堂「${lesson.subject}」` };
+  }
+
+  if (grade >= 5 && (lesson.subject === "彈(英)" || lesson.subject === "英文")) {
+    const conflictSubject = lesson.subject === "彈(英)" ? "英文" : "彈(英)";
+    for (let p = 1; p <= 7; p++) {
+      if (p === toPeriod) continue;
+      const targetCell = schedule[classId][`${toDay}-${p}`];
+      if (targetCell && targetCell.subject === conflictSubject) {
+        return { valid: false, reason: `高年級「彈(英)」與「英文」不得在同一天` };
+      }
     }
   }
 

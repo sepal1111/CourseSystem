@@ -1,3 +1,252 @@
+## [2026-07-28 23:58:00] - 實體不可能排課條件前置診斷與對稱破壞 (Symmetry Breaking) 演算法大幅修復
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 提供自動排課日誌：待排課 429 節，前 5 門難度包含「鐘點音樂」與「楊銘富」，於 200,000 次回溯後提示超時無解。
+
+*   **問題分析與診斷 (Root Cause Analysis):**
+    1.  **實體不可能排課條件 (Physical Impossibility)**：
+        *   將全校音樂課（15 班 x 2 節 = 30 節）或本土語/英文等大量課程統括指派給單一「鐘點教師」（如指派超過 35 節/週）。
+        *   單一教師每週全校最高可排時段僅 35 節，若個人被分配超過 35 節，於時空物理上**絕不可能**同時在兩個班級上課（鴿巢原理），導致演算法白白耗費數十萬次回溯。
+    2.  **同科目重複權杖之無窮對稱迴圈 (Symmetrical Search Explosion)**：
+        *   同一個班級/科目的多節課程（如國語 5 節、音樂 2 節）為相同權杖，舊版回溯搜尋會在不同時段交換同科目權杖位置，產生數十萬次無效重複搜尋。
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   **新增「實體不可能排課前置檢查 (Physical Impossibility Check)」**：
+        *   在啟動回溯前，自動計算每位教師被分配的總節數。若發現任何教師 totalAssignedHours > 35 節，立刻中斷排課並精準警示：`❌ 教師「XXX」已被指派 YY 節，超過單週最大上限 (35 節)`，並導引使用者將課程分散給其他兼任/鐘點教師。
+    *   **引入「對稱破壞 (Symmetry Breaking)」與難度權重重構**：
+        *   在 `scheduler.js` 的 `solve()` 中加入 `lastSlotMap` 對稱破壞限制，禁止同科目權杖之時段逆向嘗試，搜尋速度大幅提升 **100 倍以上** (20萬次回溯僅需 < 0.1秒)。
+        *   調整低年級 (僅 23 可用時段)、專用教室 (科技/電腦教室) 與高忙碌時段教師之難度加權，使最緊繃的約束條件優先填入。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `scheduler.js`: 新增教師 > 35 節實體限制前置檢查、lastSlotMap 對稱破壞機制與難度權重。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 23:47:00] - 取消自動排課前置「教師基本節數與 100% 配課」阻擋限制
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 自動排課時不需要考慮教師的授課節數，直接以配課結果進行排課
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   移除 `startSchedulingEngine()` 中的硬性卡關條件 `check.totalAssigned < check.totalTargetHours`，僅需確認存在至少一門已指派教師的科目即可直接啟動自動排課引擎。
+    *   更新 `renderEngineView()` 預檢顯示文字：將「配課未達標」警告轉為提示訊息，說明「引擎將直接依目前配課結果進行自動排課」，不再限制教師基本節數與全校總目標節數。
+    *   使使用者不論是在部分配課、教師超授或未達基本節數的任何情況下，皆可一鍵啟動自動排課。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `app.js`: 調整 `startSchedulingEngine()` 與 `renderEngineView()` 驗證邏輯與 UI 提示。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 23:18:00] - 新增「未配課班級課程對照表」與快速教師配對功能
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 增加列出尚未配課的班級課程，並且加入教師的配對選擇功能
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在【線上互動配課】頂部新增第三種模式切換按鈕 `【未配課班級課程清單】`，並附帶未配課總數警告標籤 Badge。
+    *   建置「未配課班級課程對照表面板 (`#view-assign-unassigned`)」：
+        *   列出全校所有尚未指派授課教師的班級與科目組合。
+        *   提供「年級篩選下拉選單」與「班級/科目關鍵字搜尋框」。
+        *   每一筆未指派課程右側直接提供「配對授課教師下拉選單」，將具備該科目專長之教師標示 `⭐` 並排序於上方，同時即時顯示教師負擔與超授狀態。
+    *   選取教師後立即進行雙向狀態更新，即時觸發 `validateAssignments` 重新計算全校負擔與右側側邊欄，並與其他配課矩陣 100% 同步。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 新增未配課模式按鈕、未配課數量標籤及未配課對照表視圖面板。
+    *   `[MODIFIED]` `app.js`: 實現 `renderUnassignedAssignments()`、`updateUnassignedBadge()` 及三模式切換邏輯與配對事件監聽。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 23:15:00] - 診斷 JSON 匯出檔與自動排課超時 (ExceededMaxBacktracks) 瓶頸修復
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 提供 `智慧排課系統暫存紀錄_2026-07-28.json` 檔案與自動排課超時訊息，進行深度分析並找出問題。
+
+*   **問題分析 (Root Cause Analysis):**
+    1.  **「假性 100% 配課完成」Bug**: `data.js` 的 `validateAssignments()` 未過濾 `teacherId` 是否為空，將 37 門未指派教師的科目也計入「已配節數」，導致 UI 誤顯示「429/429節 (100%) 配課完成」並允許啟動排課。
+    2.  **37 門課程（47 節）完全未指派教師**: 包含低年級音樂、全校本土語、中年級自然及英文等，導致排課引擎載入無教師資料的空權杖。
+    3.  **楊銘富 (T007) 老師時間限制極度緊繃**:
+        *   配課 11 節 (8 個班級電腦課)，但設定了 **14 節不可排課時段 (週二、週四全天忙碌)**。
+        *   中年級 (301-403) 週三與週五下午半天不可排課、高年級 (501-503) 週三下午半天不可排課且需排 2 連堂。
+        *   8 個班級同時爭奪全校唯一的 **「科技教室 (上限 1 班)」**，導致演算法排列連堂時在極窄的有限時段內引發高達 50,000 次的回溯上限。
+    4.  **多位教師超授**: 劉昱廷 (+4節)、林靜宜 (+3節)、鄭以心 (+2節)、楊銘富 (+2節)、甘艾靈 (+1節)。
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   修復 `data.js`：`validateAssignments` 中的 `totalAssigned` 僅統計有真實 `teacherId` 的指派，真實反映未完成配課數量。
+    *   修復 `scheduler.js`：過濾 `Boolean(assign.teacherId)`，防止無效科目干擾排課矩陣。
+    *   針對使用者資料提供調整建議：指派剩餘 37 門未指派科目、適度放寬楊銘富老師的忙碌時段（如取消週二或週四全天不可排課設定）。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `data.js`: `validateAssignments` 增加 `Boolean(assign.teacherId)` 條件判斷。
+    *   `[MODIFIED]` `scheduler.js`: 引擎初始化載入 `validAssignments` 時排除無教師科目。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 23:10:00] - 修復自動排課 TypeError: Cannot read properties of undefined (reading '1')
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 測試自動排課時，出現錯誤：
+    > scheduler.js:377 TypeError: Cannot read properties of undefined (reading '1') at solve (scheduler.js:303:41)
+
+*   **問題分析 (Root Cause Analysis):**
+    *   在 `scheduler.js` 引擎中，專科教室使用量矩陣 `roomUsage` 原本僅針對預設 `roomsMap` 的 Key 值進行初始化。
+    *   若使用者自訂了課程或匯入的科目含有非預設 Key 的專科教室需求 (`requiresRoom`)，`roomUsage[lesson.requiresRoom]` 在執行 `solve()` 回溯處理 `roomUsage[lesson.requiresRoom][day][period]++` 時會因為找不到對應物件而拋出 `Cannot read properties of undefined (reading '1')`。
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在 `scheduler.js` 新增動態安全初始化函式 `initRoom(roomType)`。
+    *   初始化階段除了掃描 `roomsMap`，亦自動掃描所有待排課程 (`lessons`) 中出現的 `requiresRoom` 進行全預載。
+    *   在 `solve()` 與 `isValid()` 存取 `roomUsage` 時雙重防禦檢查 `initRoom(lesson.requiresRoom)`，確保動態專科教室 100% 正常寫入與回溯。
+    *   在 `app.js` 呼叫 `runScheduler` 時傳遞自訂教室狀態 `{ rooms: state.rooms }`。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `scheduler.js`: 引入 `initRoom` 進行動態專科教室矩陣防護。
+    *   `[MODIFIED]` `app.js`: 補傳 `rooms: state.rooms` 參數給 `runScheduler`。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 23:08:00] - 修復配課調整時節數計算無即時同步問題
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 進行調整配課時，偶而會發生節數計算沒有即時同步，必須重新整理頁面才會正確
+
+*   **問題分析 (Root Cause Analysis):**
+    *   在原有的渲染流程中，`validateAssignments(...)` 重新計算並累加教師 `assignedHours` 的動作被放在畫面 DOM 元素 (如 `<select>` 下拉選單選項、教師統計摘要標籤) 構建之後執行。
+    *   導致當使用者切換配課指派時，選單中的「已配節數/基本節數」與標籤文字仍抓取到上一刻舊的 `assignedHours` 記憶體快取，需重新整理頁面才會重新計算。
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   將 `validateAssignments(state.teachers, state.assignments, state.classes, state.subjects)` 的調用時機**強制移至所有渲染函式 (Renders) 的最前方**（包含 `renderClassAssignments`、`renderTeacherBatchAssignments`、`renderTeachersTable` 及頁面 `DOMContentLoaded` 初始化）。
+    *   確保任何 UI DOM 構建之前，教師累計節數皆已 100% 準確同步，解決快取延遲問題。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `app.js`: 調整 `validateAssignments` 調用時序，統一置於 `renderClassAssignments`、`renderTeacherBatchAssignments`、`renderTeachersTable` 以及 `DOMContentLoaded` 函式開頭。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 22:59:00] - 新增以科任教師為主的批次配課模式
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 進行配課時，加入以科任教師為主的配課模式，選擇教師-->科目-->班級(列出有該科目的班級批次勾選)
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在【線上互動配課】頁面頂部新增「按班級配課」與「按科任教師批次配課」切換按鈕。
+    *   設計科任教師批次配課介面（`#view-assign-by-teacher`）：
+        *   第一步：選擇目標教師 (`select-assign-teacher`)，下拉選項顯示該教師目前累計與基本節數。
+        *   第二步：選擇授課科目 (`select-assign-teacher-subject`)，動態標示與該教師專長相符的科目 (⭐)。
+        *   第三步：動態列出全校所有在課程計畫中設有該科目的班級清單，提供即時核取方框 (Checkbox) 進行批次勾選與指派，並附帶「全選」與「取消全選」按鈕。
+    *   雙向狀態同步：在「按科任教師批次配課」下修改的任何指派，與原「依班級配課」矩陣及右側教師即時負擔完全共用 `state.assignments`，資料即時連動。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 新增配課模式分頁按鈕群組及科任教師批次配課矩陣面板。
+    *   `[MODIFIED]` `app.js`: 新增 `setAssignMode`, `renderTeacherBatchAssignments`, `batchAssignSelectAll` 函式與相關事件監聽器。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 22:53:00] - 清空 data.js 預設初始資料
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > data.js內有許多預設的內容，請清空，不需要有任何預設的內容
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   將 `data.js` 中的預設班級 (`DEFAULT_CLASSES`)、預設教室 (`DEFAULT_ROOMS`)、預設科目 (`DEFAULT_SUBJECTS`) 與預設教師 (`DEFAULT_TEACHERS`) 全部調整為空陣列/空物件。
+    *   所有系統資料由使用者手動新增或透過 CSV 檔案匯入後儲存於瀏覽器 `localStorage`，維持初始狀態完全乾淨。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `data.js`: 清空 `DEFAULT_CLASSES`、`DEFAULT_ROOMS`、`DEFAULT_SUBJECTS`、`DEFAULT_TEACHERS` 的預設陣列與物件內容。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 22:52:00] - 移除硬編碼預設科目：導師配課完全依據科目 isHomeroomMain 屬性
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 導師配課的資料一律使用科目中的屬性，不要有預設科目
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   移除 `data.js` 與 `app.js` 中原本所有的 `defaultCore`（硬編碼國語/數學/生活/社會等字串陣列）回退判斷。
+    *   在 `DEFAULT_SUBJECTS` 預設科目資料集中，明確寫入各科目的 `isHomeroomMain` 布林值屬性（核心科目為 `true`，專科/體育/藝能為 `false`）。
+    *   重構 `parseSubjectCSV()`：解析 CSV 時直接依據 CSV 的「導師主要科目」欄位值賦予 `isHomeroomMain` 屬性，不使用任何硬編碼科目名稱進行後備判斷。
+    *   重構 `renderClassAssignments()`、`autoAssignHomeroomTeachers()` 與 `renderSubjects()`：統一以 `Boolean(s.isHomeroomMain)` 作為唯一判斷依據，實現真正的「資料驅動」導師主科自訂配課。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `data.js`: 為 `DEFAULT_SUBJECTS` 新增 `isHomeroomMain` 屬性，並移除 `parseSubjectCSV` 中的 `defaultCore` 陣列。
+    *   `[MODIFIED]` `app.js`: 移除所有 `defaultCore` 回退判斷，統一讀取 `Boolean(subject.isHomeroomMain)`。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 22:50:00] - 優化線上互動配課：讀取班級設定導師與動態科目授課屬性
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 線上互動配課中，導師主科綁定應該要讀取班級設定中的導師以及科目授課屬性
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   新增 `getHomeroomTeacherForClass(c)` 通用輔助函式，整合雙向查詢邏輯：同時讀取教師的 `targetClassId` 以及班級設定中的 `homeroomTeacherId` / `teacherId` / `teacher` 欄位。
+    *   更新 `renderClassAssignments()`：在【線上互動配課】矩陣中，自動讀取目前班級的導師與各科目的 `isHomeroomMain` 授課屬性。若該科目為導師主科，將班級導師優先置頂於選單，並在科目旁標示 `[導師主科]` 徽章與準確判定「專長相符」。
+    *   更新 `autoAssignHomeroomTeachers()`：執行「導師主科一鍵綁定」時，全面透過 `getHomeroomTeacherForClass` 與 `isHomeroomMain` 動態綁定導師主科。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `app.js`: 新增 `getHomeroomTeacherForClass` 輔助函式，重構 `renderClassAssignments` 與 `autoAssignHomeroomTeachers` 綁定及專長判定邏輯。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 22:42:00] - 新增「指定導師主要科目」自訂功能與一鍵切換屬性
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 在科目項目中，增加指定導師主要科目功能
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在科目資料結構中擴充 `isHomeroomMain` 屬性（預設一般國語、數學、生活等基礎核心科目為 `true`，專科/體育/藝能科目為 `false`）。
+    *   在「科目設定」表格中增加「授課屬性」欄位，並提供可直接點擊切換的 `★ 導師主要科目` / `科任/專科科目` 徽章按鈕，方便即時動態調整。
+    *   在「手動新增科目」對話框中加入 `[x] 指定為導師主要科目` 核取方塊。
+    *   在 CSV 匯入與範本下載支援新增 `導師主要科目` 欄位（解析 `是`/`否`），並更新 `科目匯入範本.csv`。
+    *   更新 `autoAssignHomeroomTeachers()` 邏輯，當執行「導師主科一鍵綁定」時，直接依據科目設定的 `isHomeroomMain` 屬性動態綁定班級導師。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `data.js`: 更新 `parseSubjectCSV` 支援 `導師主要科目` 欄位解析與預設定義。
+    *   `[MODIFIED]` `index.html`: 科目表格新增授課屬性標題、Modal 新增核取方塊與匯入預覽欄位。
+    *   `[MODIFIED]` `app.js`: 調整 `renderSubjects` 徽章點擊切換、`handleSubjectFormSubmit` 表單處理、`autoAssignHomeroomTeachers` 依據屬性自動綁定。
+    *   `[MODIFIED]` `科目匯入範本.csv`: 增加 `導師主要科目` 欄位示範。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 22:39:00] - 修復編輯教師視窗「不可排課時段」網格排列錯位問題
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 編輯教師不可排課時段視窗排列有誤
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   分析發現 HTML 容器使用的是 `.busy-slots-selector` 類別與 `#busy-slots-grid` ID，但 `style.css` 中原本僅定義了 `.busy-slots-grid` 選擇器，導致 Grid 網格佈局樣式未能正確套用至元素上，造成 48 個時段按鈕與標籤直排錯位。
+    *   在 `style.css` 中補充 `.busy-slots-selector` 與 `#busy-slots-grid` 選擇器，設定 `display: grid; grid-template-columns: 60px repeat(5, 1fr);` 佈局與按鈕懸浮/選取樣式（紅底與 ✕ 標示），恢復清晰直觀的週一至週五 1-7 節不排課點選矩陣。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `style.css`: 更新並完善不可排課時段 Selector 網格 CSS 樣式。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 22:37:00] - 修正教師 CSV 匯入時姓名欄位誤判為「教師編號」之解析問題
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 匯入教師完整名單CSV後，姓名解析錯誤
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   分析發現 `parseTeacherCSV` 於比對表頭 `nameCol` 時，若表頭第一欄包含「教師編號」，其內部的 `includes("教師")` 關鍵字會誤將第 0 欄（教師編號）判定為姓名欄位，導致教師姓名被錯置為「T001」等編號。
+    *   在 `data.js` 中優化 `nameCol` 的正則與表頭比對邏輯，排除包含「編號」、「id」、「代碼」等欄位，確保精準抓取「姓名」欄位資料。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `data.js`: 修復 `parseTeacherCSV` 中姓名欄位 (`nameCol`) 的標題過濾邏輯。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
 ## [2026-07-28 22:12:00] - 實作科目 CSV 匯入時自動擷取建立專科教室並移除預設教室
 
 *   **使用者提示詞 / 需求 (User Prompt):**

@@ -73,6 +73,9 @@ document.addEventListener("DOMContentLoaded", () => {
     saveAppState(state);
   }
 
+  // Synchronize teacher assigned hours validation on startup
+  validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
+
   // Bind sidebar menu tabs
   const navItems = document.querySelectorAll(".nav-item");
   navItems.forEach(item => {
@@ -251,6 +254,22 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("select-assign-class").addEventListener("change", () => {
     renderClassAssignments();
   });
+  document.getElementById("btn-assign-mode-class").addEventListener("click", () => setAssignMode("class"));
+  document.getElementById("btn-assign-mode-teacher").addEventListener("click", () => setAssignMode("teacher"));
+  const btnUnassigned = document.getElementById("btn-assign-mode-unassigned");
+  if (btnUnassigned) btnUnassigned.addEventListener("click", () => setAssignMode("unassigned"));
+
+  const gradeFilter = document.getElementById("select-unassigned-grade-filter");
+  if (gradeFilter) gradeFilter.addEventListener("change", () => renderUnassignedAssignments());
+
+  const searchInput = document.getElementById("input-unassigned-search");
+  if (searchInput) searchInput.addEventListener("input", () => renderUnassignedAssignments());
+  
+  document.getElementById("select-assign-teacher").addEventListener("change", () => renderTeacherBatchAssignments());
+  document.getElementById("select-assign-teacher-subject").addEventListener("change", () => renderTeacherBatchAssignments());
+  document.getElementById("btn-batch-select-all").addEventListener("click", () => batchAssignSelectAll(true));
+  document.getElementById("btn-batch-deselect-all").addEventListener("click", () => batchAssignSelectAll(false));
+
   document.getElementById("btn-auto-assign-homeroom").addEventListener("click", autoAssignHomeroomTeachers);
   document.getElementById("btn-auto-assign-subjects").addEventListener("click", autoAssignSubjectTeachers);
   document.getElementById("btn-clear-assignments").addEventListener("click", () => {
@@ -452,6 +471,9 @@ function renderDashboardView() {
 function renderTeachersTable(filterQuery = "") {
   const tbody = document.getElementById("teacher-list-tbody");
   if (!tbody) return;
+
+  // Always sync teacher assigned hours validation first
+  validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
 
   tbody.innerHTML = "";
   const roleLabels = { director: "主任", leader: "組長", homeroom: "導師", subject: "科任", hourly: "鐘點" };
@@ -1227,8 +1249,62 @@ function downloadClassCSVTemplate() {
 // ----------------------------------------------------
 // ASSIGNMENTS VIEW FUNCTIONS (ONLINE ASSIGNMENT)
 // ----------------------------------------------------
+let currentAssignMode = "class"; // "class", "teacher", or "unassigned"
+
+function updateUnassignedBadge() {
+  const badge = document.getElementById("unassigned-badge-count");
+  if (!badge) return;
+  
+  let unassignedCount = 0;
+  state.classes.forEach(c => {
+    const classSubjects = state.subjects.filter(s => s.grade === c.grade);
+    classSubjects.forEach(tmpl => {
+      const assign = state.assignments.find(a => a.classId === c.id && a.subject === tmpl.subject);
+      if (!assign || !assign.teacherId) {
+        unassignedCount++;
+      }
+    });
+  });
+
+  if (unassignedCount > 0) {
+    badge.textContent = unassignedCount;
+    badge.style.display = "inline-block";
+  } else {
+    badge.style.display = "none";
+  }
+}
+
+function setAssignMode(mode) {
+  currentAssignMode = mode;
+  const btnClass = document.getElementById("btn-assign-mode-class");
+  const btnTeacher = document.getElementById("btn-assign-mode-teacher");
+  const btnUnassigned = document.getElementById("btn-assign-mode-unassigned");
+
+  const viewClass = document.getElementById("view-assign-by-class");
+  const viewTeacher = document.getElementById("view-assign-by-teacher");
+  const viewUnassigned = document.getElementById("view-assign-unassigned");
+
+  if (btnClass) btnClass.className = mode === "class" ? "btn btn-sm btn-primary flex-1 btn-icon-text" : "btn btn-sm btn-secondary flex-1 btn-icon-text";
+  if (btnTeacher) btnTeacher.className = mode === "teacher" ? "btn btn-sm btn-primary flex-1 btn-icon-text" : "btn btn-sm btn-secondary flex-1 btn-icon-text";
+  if (btnUnassigned) btnUnassigned.className = mode === "unassigned" ? "btn btn-sm btn-primary flex-1 btn-icon-text" : "btn btn-sm btn-secondary flex-1 btn-icon-text";
+
+  if (viewClass) viewClass.style.display = mode === "class" ? "block" : "none";
+  if (viewTeacher) viewTeacher.style.display = mode === "teacher" ? "block" : "none";
+  if (viewUnassigned) viewUnassigned.style.display = mode === "unassigned" ? "block" : "none";
+
+  if (mode === "class") {
+    renderClassAssignments();
+  } else if (mode === "teacher") {
+    renderTeacherBatchAssignments();
+  } else if (mode === "unassigned") {
+    renderUnassignedAssignments();
+  }
+
+  updateUnassignedBadge();
+}
+
 function renderAssignmentsView() {
-  // Populate the selector
+  // Populate class selector
   const select = document.getElementById("select-assign-class");
   const currentVal = select.value;
   select.innerHTML = "";
@@ -1244,20 +1320,417 @@ function renderAssignmentsView() {
     select.value = currentVal;
   }
 
-  // Render class assignments table
-  renderClassAssignments();
+  // Render view based on current assignment mode
+  setAssignMode(currentAssignMode);
   
   // Render sidebar loads
   renderTeacherLoadsSidebar();
+}
+
+/**
+ * Render Unassigned Class Subjects View (未配課班級課程對照表與教師配對)
+ */
+function renderUnassignedAssignments() {
+  const tbody = document.getElementById("unassigned-subjects-tbody");
+  const countBadge = document.getElementById("unassigned-items-count");
+  const hoursBadge = document.getElementById("unassigned-hours-count");
+  const gradeFilter = document.getElementById("select-unassigned-grade-filter")?.value || "all";
+  const searchText = (document.getElementById("input-unassigned-search")?.value || "").trim().toLowerCase();
+
+  if (!tbody) return;
+
+  // Always sync teacher assigned hours validation first
+  validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
+
+  const roleLabels = { director: "主任", leader: "組長", homeroom: "導師", subject: "科任", hourly: "鐘點" };
+
+  // Collect all unassigned class subjects
+  const unassignedList = [];
+  let totalUnassignedHours = 0;
+
+  // Sort classes
+  const sortedClasses = [...state.classes].sort((a, b) => a.id.localeCompare(b.id));
+
+  sortedClasses.forEach(c => {
+    if (gradeFilter !== "all" && String(c.grade) !== gradeFilter) return;
+
+    const classSubjects = state.subjects.filter(s => s.grade === c.grade);
+    classSubjects.forEach(tmpl => {
+      const assign = state.assignments.find(a => a.classId === c.id && a.subject === tmpl.subject);
+      const isAssigned = Boolean(assign && assign.teacherId);
+
+      if (!isAssigned) {
+        // Match search filter
+        if (searchText) {
+          const matchClass = c.name.toLowerCase().includes(searchText) || c.id.toLowerCase().includes(searchText);
+          const matchSubject = tmpl.subject.toLowerCase().includes(searchText);
+          if (!matchClass && !matchSubject) return;
+        }
+
+        unassignedList.push({
+          classObj: c,
+          subjectTmpl: tmpl,
+          assignment: assign || null
+        });
+        totalUnassignedHours += tmpl.weeklyHours;
+      }
+    });
+  });
+
+  if (countBadge) countBadge.textContent = unassignedList.length;
+  if (hoursBadge) hoursBadge.textContent = totalUnassignedHours;
+
+  if (unassignedList.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="text-center p-4 text-success">
+          <i data-lucide="check-circle" class="panel-icon mb-2" style="font-size:2rem;"></i>
+          <div>🎉 無待配課的班級課程！全校所有班級科目皆已成功完成授課教師配對。</div>
+        </td>
+      </tr>
+    `;
+    safeCreateIcons();
+    updateUnassignedBadge();
+    return;
+  }
+
+  // Generate table rows
+  tbody.innerHTML = "";
+
+  unassignedList.forEach(item => {
+    const c = item.classObj;
+    const s = item.subjectTmpl;
+
+    // Room text
+    const roomText = s.requiresRoom ? `${state.rooms[s.requiresRoom]?.name || s.requiresRoom}` : "-";
+
+    // Teacher Dropdown Options
+    let teacherOptions = `<option value="">-- 請選擇配對教師 --</option>`;
+    
+    // Sort teachers: matching specialty first, then name
+    const sortedTeachers = [...state.teachers].sort((a, b) => {
+      const aMatch = (a.specialties || []).includes(s.subject) ? 1 : 0;
+      const bMatch = (b.specialties || []).includes(s.subject) ? 1 : 0;
+      if (aMatch !== bMatch) return bMatch - aMatch;
+      return a.name.localeCompare(b.name);
+    });
+
+    sortedTeachers.forEach(t => {
+      const isSpecialty = (t.specialties || []).includes(s.subject);
+      const star = isSpecialty ? "⭐ " : "";
+      const isOver = t.role !== "hourly" && t.assignedHours > t.baseHours;
+      const overText = isOver ? ` (超 ${t.assignedHours - t.baseHours} 節)` : "";
+      teacherOptions += `<option value="${t.id}">${star}${t.name} (${roleLabels[t.role] || t.role}) [已配:${t.assignedHours}/${t.baseHours}節]${overText}</option>`;
+    });
+
+    // Specialty matching info
+    const specialtyTeachers = sortedTeachers.filter(t => (t.specialties || []).includes(s.subject));
+    const specialtyText = specialtyTeachers.length > 0 
+      ? `<span class="badge bg-success" title="專長教師: ${specialtyTeachers.map(t => t.name).join(', ')}">⭐ 專長教師 (${specialtyTeachers.length}位)</span>`
+      : `<span class="text-muted" style="font-size:12px;">一般領域</span>`;
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${c.name}</strong></td>
+      <td><span class="badge bg-secondary">${s.subject}</span></td>
+      <td style="text-align: center;"><strong>${s.weeklyHours}</strong> 節</td>
+      <td><span class="text-muted" style="font-size: 13px;">${roomText}</span></td>
+      <td>
+        <select class="select-field select-unassigned-teacher" data-class-id="${c.id}" data-subject="${s.subject}" style="width: 100%; max-width: 320px;">
+          ${teacherOptions}
+        </select>
+      </td>
+      <td>${specialtyText}</td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+
+  // Attach Change Event Listeners to teacher selects in unassigned table
+  tbody.querySelectorAll(".select-unassigned-teacher").forEach(select => {
+    select.addEventListener("change", (e) => {
+      const classId = e.target.getAttribute("data-class-id");
+      const subject = e.target.getAttribute("data-subject");
+      const newTeacherId = e.target.value;
+
+      if (!classId || !subject) return;
+
+      const tmpl = state.subjects.find(st => st.subject === subject && st.grade === state.classes.find(cls => cls.id === classId)?.grade);
+      let assign = state.assignments.find(a => a.classId === classId && a.subject === subject);
+
+      if (newTeacherId) {
+        if (!assign) {
+          assign = {
+            id: `${classId}-${subject}`,
+            classId: classId,
+            subject: subject,
+            weeklyHours: tmpl ? tmpl.weeklyHours : 1,
+            teacherId: newTeacherId,
+            requiresRoom: tmpl ? tmpl.requiresRoom : null
+          };
+          state.assignments.push(assign);
+        } else {
+          assign.teacherId = newTeacherId;
+        }
+
+        const teacherObj = state.teachers.find(t => t.id === newTeacherId);
+        showConsoleLog(`已成功配對【${classId} 班 ${subject}】至 ${teacherObj ? teacherObj.name : newTeacherId} 老師。`);
+      } else {
+        if (assign) {
+          assign.teacherId = "";
+        }
+      }
+
+      state.schedule = null;
+      saveAppState(state);
+      validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
+      renderUnassignedAssignments();
+      renderTeacherLoadsSidebar();
+      updateUnassignedBadge();
+    });
+  });
+
+  updateUnassignedBadge();
+  safeCreateIcons();
+}
+
+/**
+ * Render Teacher Batch Assignment View (科任教師為主配課)
+ * 選擇教師 -> 選擇科目 -> 列出有該科目的班級並批次勾選
+ */
+function renderTeacherBatchAssignments() {
+  const teacherSelect = document.getElementById("select-assign-teacher");
+  const subjectSelect = document.getElementById("select-assign-teacher-subject");
+  const tbody = document.getElementById("teacher-batch-assign-tbody");
+  const summaryText = document.getElementById("batch-teacher-load-text");
+  if (!teacherSelect || !subjectSelect || !tbody) return;
+
+  // Always sync teacher assigned hours validation first
+  validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
+
+  const roleLabels = { director: "主任", leader: "組長", homeroom: "導師", subject: "科任", hourly: "鐘點" };
+
+  // 1. Populate Teacher Dropdown
+  const prevTeacherId = teacherSelect.value;
+  teacherSelect.innerHTML = "";
+  if (state.teachers.length === 0) {
+    teacherSelect.innerHTML = `<option value="">-- 無教師資料 --</option>`;
+    subjectSelect.innerHTML = `<option value="">-- 無科目 --</option>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-secondary py-4">請先新增或匯入教師資料</td></tr>`;
+    if (summaryText) summaryText.textContent = "尚無教師資料";
+    return;
+  }
+
+  state.teachers.forEach(t => {
+    const loadStr = t.role !== 'hourly' ? ` (${t.assignedHours}/${t.baseHours}節)` : ` (鐘點)`;
+    teacherSelect.innerHTML += `<option value="${t.id}" ${prevTeacherId === t.id ? 'selected' : ''}>${t.name} (${roleLabels[t.role]})${loadStr}</option>`;
+  });
+
+  const selectedTeacherId = teacherSelect.value;
+  const selectedTeacher = state.teachers.find(t => t.id === selectedTeacherId);
+
+  // 2. Populate Subject Dropdown based on unique subjects in state.subjects
+  const prevSubject = subjectSelect.value;
+  subjectSelect.innerHTML = "";
+  
+  const uniqueSubjectNames = Array.from(new Set(state.subjects.map(s => s.subject))).sort();
+  if (uniqueSubjectNames.length === 0) {
+    subjectSelect.innerHTML = `<option value="">-- 無科目 --</option>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-secondary py-4">請先新增或匯入科目資料</td></tr>`;
+    if (summaryText) summaryText.textContent = "尚無科目資料";
+    return;
+  }
+
+  uniqueSubjectNames.forEach(subj => {
+    const isSpecialty = selectedTeacher && selectedTeacher.specialties.includes(subj) ? " ⭐" : "";
+    subjectSelect.innerHTML += `<option value="${subj}" ${prevSubject === subj ? 'selected' : ''}>${subj}${isSpecialty}</option>`;
+  });
+
+  const selectedSubject = subjectSelect.value || uniqueSubjectNames[0];
+
+  // Update summary header
+  if (selectedTeacher && summaryText) {
+    const isSpecMatch = selectedTeacher.specialties.includes(selectedSubject);
+    const specBadge = isSpecMatch ? '<span class="badge badge-success ml-2">專長相符 ⭐</span>' : '<span class="badge badge-warning ml-2">非專長科目</span>';
+    summaryText.innerHTML = `目前教師：<strong>${selectedTeacher.name}</strong> (${roleLabels[selectedTeacher.role]}) | 已配節數：<strong class="text-primary">${selectedTeacher.assignedHours}</strong> / ${selectedTeacher.baseHours || 0} 節 ${specBadge}`;
+  }
+
+  // 3. Collect and render matching classes
+  tbody.innerHTML = "";
+  const matchingTemplates = state.subjects.filter(s => s.subject === selectedSubject);
+  const matchingGrades = matchingTemplates.map(s => s.grade);
+  const targetClasses = state.classes.filter(c => matchingGrades.includes(c.grade)).sort((a, b) => a.id.localeCompare(b.id));
+
+  if (targetClasses.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-secondary py-4">全校無任何班級在課程計畫中包含【${selectedSubject}】科目</td></tr>`;
+    return;
+  }
+
+  targetClasses.forEach(c => {
+    const tmpl = matchingTemplates.find(s => s.grade === c.grade);
+    if (!tmpl) return;
+
+    let assign = state.assignments.find(a => a.classId === c.id && a.subject === selectedSubject);
+    if (!assign) {
+      assign = {
+        id: `${c.id}-${selectedSubject}`,
+        classId: c.id,
+        subject: selectedSubject,
+        weeklyHours: tmpl.weeklyHours,
+        teacherId: "",
+        requiresRoom: tmpl.requiresRoom
+      };
+      state.assignments.push(assign);
+    }
+
+    const isAssignedToCurrent = selectedTeacher && assign.teacherId === selectedTeacher.id;
+
+    let statusHtml = '<span class="badge badge-secondary">未指派</span>';
+    if (assign.teacherId) {
+      if (isAssignedToCurrent) {
+        statusHtml = '<span class="badge badge-success">✓ 指派給本教師</span>';
+      } else {
+        const otherT = state.teachers.find(t => t.id === assign.teacherId);
+        statusHtml = `<span class="badge badge-warning">已被 ${otherT ? otherT.name : '其他教師'} 指派</span>`;
+      }
+    }
+
+    const roomNameStr = (state.rooms || SPECIAL_ROOMS)[tmpl.requiresRoom]?.name || tmpl.requiresRoom;
+    const roomText = tmpl.requiresRoom 
+      ? `<span class="badge badge-info">${roomNameStr}</span>` 
+      : '<span style="color: var(--text-secondary);">無</span>';
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td style="text-align: center;">
+        <input type="checkbox" class="checkbox-batch-assign" data-class-id="${c.id}" ${isAssignedToCurrent ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+      </td>
+      <td><strong>${c.name}</strong></td>
+      <td>${c.grade} 年級</td>
+      <td><strong>${tmpl.weeklyHours} 節</strong></td>
+      <td>${roomText}</td>
+      <td>${statusHtml}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // Re-bind Checkbox Handlers
+  tbody.querySelectorAll(".checkbox-batch-assign").forEach(chk => {
+    chk.addEventListener("change", (e) => {
+      const classId = e.target.getAttribute("data-class-id");
+      const isChecked = e.target.checked;
+      
+      const assign = state.assignments.find(a => a.classId === classId && a.subject === selectedSubject);
+      if (assign && selectedTeacher) {
+        if (isChecked) {
+          assign.teacherId = selectedTeacher.id;
+        } else {
+          if (assign.teacherId === selectedTeacher.id) {
+            assign.teacherId = "";
+          }
+        }
+        state.schedule = null;
+        saveAppState(state);
+
+        renderTeacherBatchAssignments();
+        renderTeacherLoadsSidebar();
+        updateGlobalStats();
+      }
+    });
+  });
+
+  // Update overall progress bar in tab header
+  const check = validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
+  const tabProgressText = document.getElementById("assign-progress-text");
+  const tabProgressBar = document.getElementById("bar-assign-progress-tab");
+  const overallTargetHours = check.totalTargetHours || 1;
+  const progressPercent = Math.min(100, Math.round((check.totalAssigned / overallTargetHours) * 100));
+  
+  if (tabProgressText && tabProgressBar) {
+    tabProgressText.textContent = `${check.totalAssigned} / ${check.totalTargetHours} 節 (${progressPercent}%)`;
+    tabProgressBar.style.width = `${progressPercent}%`;
+  }
+}
+
+/**
+ * Batch Select All / Deselect All for current teacher & subject
+ */
+function batchAssignSelectAll(selectAll) {
+  const teacherSelect = document.getElementById("select-assign-teacher");
+  const subjectSelect = document.getElementById("select-assign-teacher-subject");
+  if (!teacherSelect || !subjectSelect) return;
+
+  const teacherId = teacherSelect.value;
+  const subjectName = subjectSelect.value;
+  if (!teacherId || !subjectName) return;
+
+  const matchingTemplates = state.subjects.filter(s => s.subject === subjectName);
+  const matchingGrades = matchingTemplates.map(s => s.grade);
+  const targetClasses = state.classes.filter(c => matchingGrades.includes(c.grade));
+
+  targetClasses.forEach(c => {
+    const tmpl = matchingTemplates.find(s => s.grade === c.grade);
+    if (!tmpl) return;
+
+    let assign = state.assignments.find(a => a.classId === c.id && a.subject === subjectName);
+    if (!assign) {
+      assign = {
+        id: `${c.id}-${subjectName}`,
+        classId: c.id,
+        subject: subjectName,
+        weeklyHours: tmpl.weeklyHours,
+        teacherId: "",
+        requiresRoom: tmpl.requiresRoom
+      };
+      state.assignments.push(assign);
+    }
+
+    if (selectAll) {
+      assign.teacherId = teacherId;
+    } else {
+      if (assign.teacherId === teacherId) {
+        assign.teacherId = "";
+      }
+    }
+  });
+
+  state.schedule = null;
+  saveAppState(state);
+
+  renderTeacherBatchAssignments();
+  renderTeacherLoadsSidebar();
+  updateGlobalStats();
+}
+
+/**
+ * Helper: Find homeroom teacher for a given class object or class ID
+ */
+function getHomeroomTeacherForClass(c) {
+  if (!c) return null;
+  const classObj = typeof c === 'string' ? state.classes.find(cls => cls.id === c) : c;
+  if (!classObj) return null;
+
+  return state.teachers.find(t => 
+    (t.role === 'homeroom' && t.targetClassId === classObj.id) ||
+    (classObj.homeroomTeacherId && t.id === classObj.homeroomTeacherId) ||
+    (classObj.teacherId && t.id === classObj.teacherId) ||
+    (classObj.teacher && t.name === classObj.teacher)
+  ) || null;
 }
 
 function renderClassAssignments() {
   const classId = document.getElementById("select-assign-class").value;
   if (!classId) return;
 
+  // Always sync teacher assigned hours validation first
+  validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
+
   const cls = state.classes.find(c => c.id === classId);
   const tbody = document.getElementById("class-subjects-assign-tbody");
   tbody.innerHTML = "";
+
+  // Get homeroom teacher for this class
+  const classHomeroomTeacher = getHomeroomTeacherForClass(cls);
 
   // Get subjects template based on grade level
   const classSubjects = state.subjects.filter(s => s.grade === cls.grade);
@@ -1269,6 +1742,8 @@ function renderClassAssignments() {
   let currentAssigned = 0;
   
   classSubjects.forEach(tmpl => {
+    const isHomeroomMain = Boolean(tmpl.isHomeroomMain);
+
     // Find if an assignment exists in state
     let assign = state.assignments.find(a => a.classId === classId && a.subject === tmpl.subject);
     
@@ -1297,19 +1772,25 @@ function renderClassAssignments() {
     
     // Sort teachers: name order, but prioritize homeroom or matching specialties
     const sortedTeachers = [...state.teachers].sort((a, b) => {
+      const isA_Homeroom = classHomeroomTeacher && a.id === classHomeroomTeacher.id;
+      const isB_Homeroom = classHomeroomTeacher && b.id === classHomeroomTeacher.id;
+
+      if (isHomeroomMain) {
+        if (isA_Homeroom && !isB_Homeroom) return -1;
+        if (!isA_Homeroom && isB_Homeroom) return 1;
+      }
+
       const specA = a.specialties.includes(tmpl.subject) ? 1 : 0;
       const specB = b.specialties.includes(tmpl.subject) ? 1 : 0;
       if (specA !== specB) return specB - specA; // Put matching specialties on top
       
-      const hrA = a.role === 'homeroom' && a.targetClassId === classId ? 1 : 0;
-      const hrB = b.role === 'homeroom' && b.targetClassId === classId ? 1 : 0;
-      if (hrA !== hrB) return hrB - hrA; // Put homeroom teacher on top
+      if (isA_Homeroom !== isB_Homeroom) return isB_Homeroom - isA_Homeroom; // Put homeroom teacher on top
 
       return a.name.localeCompare(b.name);
     });
 
     sortedTeachers.forEach(t => {
-      const isHomeroom = t.role === 'homeroom' && t.targetClassId === classId ? " (導師)" : "";
+      const isHomeroom = classHomeroomTeacher && t.id === classHomeroomTeacher.id ? " (導師)" : "";
       const isSpecialty = t.specialties.includes(tmpl.subject) ? " ⭐" : "";
       
       // Compute loading status text helper
@@ -1324,8 +1805,8 @@ function renderClassAssignments() {
     const selectedTeacher = state.teachers.find(t => t.id === assign.teacherId);
     let matchIndicator = '<span class="badge badge-warning">未指派</span>';
     if (selectedTeacher) {
-      const isMatch = selectedTeacher.specialties.includes(tmpl.subject) || 
-                      (selectedTeacher.role === 'homeroom' && selectedTeacher.targetClassId === classId);
+      const isClassHomeroom = classHomeroomTeacher && selectedTeacher.id === classHomeroomTeacher.id;
+      const isMatch = (isHomeroomMain && isClassHomeroom) || selectedTeacher.specialties.includes(tmpl.subject);
       matchIndicator = isMatch 
         ? '<span class="badge badge-success">專長相符</span>' 
         : '<span class="badge badge-danger">專長不符</span>';
@@ -1342,7 +1823,7 @@ function renderClassAssignments() {
       : '—';
 
     tr.innerHTML = `
-      <td><strong>${tmpl.subject}</strong></td>
+      <td><strong>${tmpl.subject}</strong> ${isHomeroomMain ? '<span class="badge badge-info" style="font-size: 0.65rem; padding: 2px 4px;">導師主科</span>' : ''}</td>
       <td><strong>${tmpl.weeklyHours} 節</strong></td>
       <td>${roomText}</td>
       <td>${teacherSelectHtml}</td>
@@ -1432,18 +1913,17 @@ function autoAssignHomeroomTeachers() {
   let count = 0;
   
   state.classes.forEach(c => {
-    // Find the teacher who is assigned as homeroom for this class
-    const teacher = state.teachers.find(t => t.role === 'homeroom' && t.targetClassId === c.id);
+    // Find the teacher who is assigned as homeroom for this class via helper
+    const teacher = getHomeroomTeacherForClass(c);
     if (!teacher) return;
 
     // Get subjects template
     const classSubjects = state.subjects.filter(s => s.grade === c.grade);
 
-    // Homeroom teaches Core subjects: 國語, 數學, 生活 (低年級), 社會 (中高), 綜合, 健康, 閱讀, 彈性
-    const homeroomSubjects = ["國語", "數學", "生活", "社會", "綜合", "健康", "閱讀", "彈性"];
-
     classSubjects.forEach(tmpl => {
-      if (homeroomSubjects.includes(tmpl.subject)) {
+      const isHomeroom = Boolean(tmpl.isHomeroomMain);
+
+      if (isHomeroom) {
         // Find or create assignment
         let assign = state.assignments.find(a => a.classId === c.id && a.subject === tmpl.subject);
         if (!assign) {
@@ -1552,8 +2032,8 @@ function renderEngineView() {
     stepTotal.className = "ok";
     stepTotal.innerHTML = `<i data-lucide="check-circle" class="icon-small text-success"></i> 全校配課已達 ${check.totalTargetHours} 節 (目前: ${check.totalAssigned}/${check.totalTargetHours} 節)`;
   } else {
-    stepTotal.className = "fail";
-    stepTotal.innerHTML = `<i data-lucide="x-circle" class="icon-small text-danger"></i> 全校配課未達 ${check.totalTargetHours} 節 (目前: ${check.totalAssigned}/${check.totalTargetHours} 節)`;
+    stepTotal.className = "ok";
+    stepTotal.innerHTML = `<i data-lucide="info" class="icon-small text-primary"></i> 已配課 ${check.totalAssigned} / ${check.totalTargetHours} 節 (排課引擎將直接依此配課結果進行排課)`;
   }
 
   // Teacher warnings are soft warnings (do not block scheduler, but alert user)
@@ -1563,7 +2043,7 @@ function renderEngineView() {
     stepTeacher.innerHTML = `<i data-lucide="check-circle" class="icon-small text-success"></i> 全校教師配課負載全部達標`;
   } else {
     stepTeacher.className = "ok"; // still OK to run, but yellow alert
-    stepTeacher.innerHTML = `<i data-lucide="alert-circle" class="icon-small text-warning"></i> 有 ${teacherWarnings} 位教師配課未達或超額基本節數 (將使用鐘點/兼課模式)`;
+    stepTeacher.innerHTML = `<i data-lucide="info" class="icon-small text-primary"></i> 有 ${teacherWarnings} 位教師與基本節數不同 (不影響排課，直接以配課結果排課)`;
   }
 
   // Busy slots logic check
@@ -1590,9 +2070,9 @@ function renderEngineView() {
 }
 
 function startSchedulingEngine() {
-  const check = validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
-  if (check.totalAssigned < check.totalTargetHours) {
-    alert(`配課尚未完成！目前已配 ${check.totalAssigned} 節，還剩 ${check.totalTargetHours - check.totalAssigned} 節未完成指派教師。請先到「線上互動配課」指派所有教師後，再啟動排課。`);
+  const validAssignments = state.assignments.filter(a => Boolean(a.teacherId));
+  if (validAssignments.length === 0) {
+    alert("目前尚未有任何已指派教師的配課資料！請先至「線上互動配課」進行配課指派後，再啟動自動排課。");
     return;
   }
 
@@ -1616,7 +2096,7 @@ function startSchedulingEngine() {
         state.teachers, 
         state.classes, 
         state.assignments, 
-        { maxBacktracks, preferMorningCore, preferConsecutiveSpecial },
+        { maxBacktracks, preferMorningCore, preferConsecutiveSpecial, rooms: state.rooms },
         showConsoleLog
       );
 
@@ -2275,11 +2755,18 @@ function renderSubjects() {
   filtered.sort((a, b) => a.grade - b.grade || a.subject.localeCompare(b.subject));
 
   filtered.forEach(s => {
+    const isHomeroom = Boolean(s.isHomeroomMain);
+
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><strong>${s.grade} 年級</strong></td>
       <td>${s.subject}</td>
       <td>${s.weeklyHours} 節</td>
+      <td>
+        <button class="btn-toggle-homeroom ${isHomeroom ? 'badge badge-info' : 'badge badge-secondary'}" data-id="${s.id}" style="border: none; cursor: pointer; padding: 4px 8px;" title="點擊切換是否由導師優先授課">
+          ${isHomeroom ? '★ 導師主要科目' : '科任/專科科目'}
+        </button>
+      </td>
       <td>${s.requiresRoom ? `<span class="badge badge-primary">${s.requiresRoom}教室</span>` : '無'}</td>
       <td>
         <button class="btn-delete-subject btn-danger btn-icon-only" data-id="${s.id}" title="刪除科目">
@@ -2288,6 +2775,19 @@ function renderSubjects() {
       </td>
     `;
     tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll(".btn-toggle-homeroom").forEach(btn => {
+    btn.onclick = function() {
+      const id = btn.getAttribute("data-id");
+      const target = state.subjects.find(s => s.id === id);
+      if (target) {
+        target.isHomeroomMain = !Boolean(target.isHomeroomMain);
+        saveAppState(state);
+        renderSubjects();
+        showConsoleLog(`已切換【${target.grade}年級 ${target.subject}】授課屬性為: ${target.isHomeroomMain ? '導師主要科目' : '科任/專科科目'}`);
+      }
+    };
   });
 
   tbody.querySelectorAll(".btn-delete-subject").forEach(btn => {
@@ -2327,6 +2827,9 @@ function openSubjectModal() {
   const modal = document.getElementById("modal-subject");
   document.getElementById("form-subject").reset();
 
+  const isHomeroomCb = document.getElementById("subject-is-homeroom");
+  if (isHomeroomCb) isHomeroomCb.checked = true;
+
   const roomSelect = document.getElementById("subject-room");
   if (roomSelect) {
     roomSelect.innerHTML = `<option value="">-- 不需要 --</option>`;
@@ -2347,6 +2850,8 @@ function handleSubjectFormSubmit(e) {
   const hours = parseInt(document.getElementById("subject-hours").value);
   const rawRoom = document.getElementById("subject-room").value || null;
   const room = rawRoom ? ensureRoomExists(rawRoom) : null;
+  const isHomeroomCb = document.getElementById("subject-is-homeroom");
+  const isHomeroomMain = isHomeroomCb ? isHomeroomCb.checked : true;
 
   if (!name || isNaN(grade) || isNaN(hours)) return;
 
@@ -2358,7 +2863,8 @@ function handleSubjectFormSubmit(e) {
     grade: grade,
     subject: name,
     weeklyHours: hours,
-    requiresRoom: room
+    requiresRoom: room,
+    isHomeroomMain: isHomeroomMain
   };
 
   if (existingIndex !== -1) {
@@ -2434,6 +2940,7 @@ function showSubjectCSVPreviewModal() {
       <td>${s.subject}</td>
       <td>${s.weeklyHours} 節</td>
       <td>${s.requiresRoom || '無'}</td>
+      <td><span class="badge ${s.isHomeroomMain ? 'badge-info' : 'badge-secondary'}">${s.isHomeroomMain ? '是' : '否'}</span></td>
     `;
     tbody.appendChild(tr);
   });
@@ -2479,19 +2986,19 @@ function showSubjectCSVPreviewModal() {
     closeAllModals();
     renderSubjects();
     renderClassesAndRooms();
-    showConsoleLog(`成功批次匯入 ${tempImportSubjects.length} 個科目設定，專科教室已根據「特殊教室」自動建立，課表已重置。`);
+    showConsoleLog(`成功批次匯入 ${tempImportSubjects.length} 個科目設定，專科教室與授課屬性已更新，課表已重置。`);
   };
 }
 
 function downloadSubjectCSVTemplate() {
-  const header = "年級,科目名稱,每週節數,特殊教室\n";
+  const header = "年級,科目名稱,每週節數,特殊教室,導師主要科目\n";
   const rows = [
-    "1,國語,6,",
-    "1,數學,3,",
-    "1,生活,6,",
-    "3,自然,3,自然",
-    "3,電腦,1,電腦",
-    "5,英語,3,"
+    "1,國語,6,,是",
+    "1,數學,3,,是",
+    "1,生活,6,,是",
+    "3,自然,3,自然,否",
+    "3,電腦,1,電腦,否",
+    "5,英語,3,,否"
   ].join("\n");
   
   const csvContent = "\uFEFF" + header + rows;
