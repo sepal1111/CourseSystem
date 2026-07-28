@@ -535,6 +535,27 @@ function renderTeachersTable(filterQuery = "") {
   safeCreateIcons();
 }
 
+function ensureRoomExists(roomKey) {
+  if (!roomKey || typeof roomKey !== 'string') return null;
+  const key = roomKey.trim();
+  if (!key || ["無", "不需要", "null", "無須", "-", "none"].includes(key.toLowerCase())) return null;
+
+  if (!state.rooms) state.rooms = {};
+  
+  if (!state.rooms[key]) {
+    let displayName = key;
+    if (!displayName.endsWith("教室") && !displayName.endsWith("館") && !displayName.endsWith("場") && !displayName.endsWith("室") && !displayName.endsWith("中心")) {
+      displayName = key + "教室";
+    }
+    state.rooms[key] = {
+      name: displayName,
+      limit: 1
+    };
+    showConsoleLog(`自動依據科目資料建立專科教室【${displayName}】(代碼: ${key}，同時段上限: 1 班)`);
+  }
+  return key;
+}
+
 function renderClassesAndRooms() {
   // Render Class cards
   const classContainer = document.getElementById("class-cards-container");
@@ -591,28 +612,7 @@ function renderClassesAndRooms() {
     }
   }
 
-export function ensureRoomExists(roomKey) {
-  if (!roomKey || typeof roomKey !== 'string') return null;
-  const key = roomKey.trim();
-  if (!key || ["無", "不需要", "null", "無須", "-", "none"].includes(key.toLowerCase())) return null;
-
-  if (!state.rooms) state.rooms = {};
-  
-  if (!state.rooms[key]) {
-    let displayName = key;
-    if (!displayName.endsWith("教室") && !displayName.endsWith("館") && !displayName.endsWith("場") && !displayName.endsWith("室") && !displayName.endsWith("中心")) {
-      displayName = key + "教室";
-    }
-    state.rooms[key] = {
-      name: displayName,
-      limit: 1
-    };
-    showConsoleLog(`自動依據科目資料建立專科教室【${displayName}】(代碼: ${key}，同時段上限: 1 班)`);
-  }
-  return key;
-}
-
-// Render Rooms limit list
+  // Render Rooms limit list
   const roomTbody = document.getElementById("room-list-tbody");
   if (roomTbody) {
     roomTbody.innerHTML = "";
