@@ -8,7 +8,9 @@ import {
   getInitialState, 
   validateAssignments, 
   parseTeacherCSV, 
-  SUBJECTS_MATRIX, 
+  parseClassCSV, 
+  parseSubjectCSV, 
+  DEFAULT_SUBJECTS, 
   SPECIAL_ROOMS 
 } from './data.js';
 
@@ -31,9 +33,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const savedState = loadAppState();
   if (savedState) {
     state = savedState;
+    let dirty = false;
+    if (!state.subjects) {
+      state.subjects = [...DEFAULT_SUBJECTS];
+      dirty = true;
+    }
     if (!state.assignments || state.assignments.length === 0) {
       const initial = getInitialState();
       state.assignments = initial.assignments;
+      dirty = true;
+    }
+    if (dirty) {
       saveAppState(state);
     }
   } else {
@@ -88,6 +98,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  document.getElementById("btn-clear-all-data").addEventListener("click", () => {
+    if (confirm("確定要清空所有資料嗎？這將會清除全校的所有教師、班級、配課與排課表！後續需要由您自行建立或匯入。")) {
+      state = {
+        teachers: [],
+        classes: [],
+        subjects: [],
+        assignments: [],
+        schedule: null
+      };
+      saveAppState(state);
+      renderCurrentTab();
+      showConsoleLog("系統資料已全部清空。");
+    }
+  });
+
   // Settings Handlers: Tab Sub buttons
   const subTabBtns = document.querySelectorAll(".tab-sub-btn");
   subTabBtns.forEach(btn => {
@@ -103,6 +128,8 @@ document.addEventListener("DOMContentLoaded", () => {
       
       if (subTabId === "classes") {
         renderClassesAndRooms();
+      } else if (subTabId === "subjects") {
+        renderSubjects();
       }
     });
   });
@@ -112,6 +139,42 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("teacher-role").addEventListener("change", (e) => {
     toggleHomeroomClassInput(e.target.value);
   });
+
+  // Class manual add handler
+  document.getElementById("btn-add-class").addEventListener("click", () => openClassModal());
+  document.getElementById("form-class").addEventListener("submit", handleClassFormSubmit);
+
+  // Class CSV import handler
+  const classCsvBtn = document.getElementById("btn-import-class");
+  const classCsvInput = document.getElementById("class-csv-file-input");
+  if (classCsvBtn && classCsvInput) {
+    classCsvBtn.addEventListener("click", () => classCsvInput.click());
+    classCsvInput.addEventListener("change", handleClassCSVSelect);
+  }
+
+  // Subject manual add handler
+  document.getElementById("btn-add-subject").addEventListener("click", () => openSubjectModal());
+  document.getElementById("form-subject").addEventListener("submit", handleSubjectFormSubmit);
+
+  // Subject CSV import handler
+  const subjectCsvBtn = document.getElementById("btn-import-subject-csv");
+  const subjectCsvInput = document.getElementById("subject-csv-file-input");
+  if (subjectCsvBtn && subjectCsvInput) {
+    subjectCsvBtn.addEventListener("click", () => subjectCsvInput.click());
+    subjectCsvInput.addEventListener("change", handleSubjectCSVSelect);
+  }
+
+  // Subject template download button
+  const downloadSubjectTmplBtn = document.getElementById("btn-download-subject-tmpl");
+  if (downloadSubjectTmplBtn) {
+    downloadSubjectTmplBtn.addEventListener("click", () => downloadSubjectCSVTemplate());
+  }
+
+  // Search subject filter event
+  const searchSubjectInput = document.getElementById("search-subject");
+  if (searchSubjectInput) {
+    searchSubjectInput.addEventListener("input", renderSubjects);
+  }
 
   // CSV Drag and drop / file selector handlers
   const csvDropZone = document.getElementById("csv-drop-zone");
@@ -140,9 +203,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  document.getElementById("download-csv-template").addEventListener("click", (e) => {
-    e.preventDefault();
+  document.getElementById("btn-download-teacher-min").addEventListener("click", () => {
+    downloadTeacherMinCSVTemplate();
+  });
+  document.getElementById("btn-download-teacher-full").addEventListener("click", () => {
     downloadCSVTemplate();
+  });
+  document.getElementById("btn-download-class-tmpl").addEventListener("click", () => {
+    downloadClassCSVTemplate();
   });
 
   // Teacher form submit
@@ -247,8 +315,10 @@ function renderCurrentTab() {
     const activeSubTab = document.querySelector(".tab-sub-btn.active").getAttribute("data-sub-tab");
     if (activeSubTab === "teachers") {
       renderTeachersTable();
-    } else {
+    } else if (activeSubTab === "classes") {
       renderClassesAndRooms();
+    } else if (activeSubTab === "subjects") {
+      renderSubjects();
     }
   } else if (currentTab === "assignments") {
     renderAssignmentsView();
@@ -266,10 +336,11 @@ function renderCurrentTab() {
 // DASHBOARD FUNCTIONS
 // ----------------------------------------------------
 function updateGlobalStats() {
-  const check = validateAssignments(state.teachers, state.assignments);
+  const check = validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
   
   // Total assigned progress
-  const progressPercent = Math.round((check.totalAssigned / 429) * 100);
+  const targetHours = check.totalTargetHours || 1;
+  const progressPercent = Math.min(100, Math.round((check.totalAssigned / targetHours) * 100));
   const progressBar = document.getElementById("bar-assign-progress");
   if (progressBar) progressBar.style.width = `${progressPercent}%`;
   
@@ -277,7 +348,7 @@ function updateGlobalStats() {
   if (progressText) progressText.textContent = `${progressPercent}%`;
   
   const detailText = document.getElementById("stat-assign-detail");
-  if (detailText) detailText.textContent = `已分配: ${check.totalAssigned} / 429 節`;
+  if (detailText) detailText.textContent = `已分配: ${check.totalAssigned} / ${check.totalTargetHours} 節`;
 
   // Timetable scheduling state
   const schedStatus = document.getElementById("stat-schedule-status");
@@ -455,25 +526,51 @@ function renderClassesAndRooms() {
     // Sort classes numerically
     const sortedClasses = [...state.classes].sort((a, b) => a.id.localeCompare(b.id));
     
-    sortedClasses.forEach(c => {
-      const targetHours = c.grade <= 2 ? 23 : (c.grade <= 4 ? 29 : 32);
-      
-      // Calculate current assigned hours for this class
-      const assigned = state.assignments
-        .filter(a => a.classId === c.id)
-        .reduce((sum, a) => sum + a.weeklyHours, 0);
+    if (sortedClasses.length === 0) {
+      classContainer.innerHTML = `<div style="text-align: center; color: var(--text-secondary); width: 100%; padding: 2rem;">目前尚無班級資料，請點擊右上角手動新增班級。</div>`;
+    } else {
+      sortedClasses.forEach(c => {
+        const targetHours = c.grade <= 2 ? 23 : (c.grade <= 4 ? 29 : 32);
+        
+        // Calculate current assigned hours for this class
+        const assigned = state.assignments
+          .filter(a => a.classId === c.id)
+          .reduce((sum, a) => sum + a.weeklyHours, 0);
 
-      const statusClass = assigned === targetHours ? 'badge-success' : (assigned > targetHours ? 'badge-danger' : 'badge-warning');
+        const statusClass = assigned === targetHours ? 'badge-success' : (assigned > targetHours ? 'badge-danger' : 'badge-warning');
 
-      const card = document.createElement("div");
-      card.className = "class-card";
-      card.innerHTML = `
-        <span class="class-card-name">${c.name}</span>
-        <span class="class-card-desc">級別: ${c.grade} 年級</span>
-        <span class="badge ${statusClass} mt-2" style="font-size: 0.7rem;">配課: ${assigned} / ${targetHours} 節</span>
-      `;
-      classContainer.appendChild(card);
-    });
+        const card = document.createElement("div");
+        card.className = "class-card";
+        card.innerHTML = `
+          <span class="class-card-name">${c.name}</span>
+          <span class="class-card-desc">級別: ${c.grade} 年級</span>
+          <span class="badge ${statusClass} mt-2" style="font-size: 0.7rem;">配課: ${assigned} / ${targetHours} 節</span>
+          <button class="btn btn-danger-outline btn-icon mt-3 btn-delete-class" data-id="${c.id}" style="padding: 4px; border-radius: 4px;" title="刪除班級">
+            <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i>
+          </button>
+        `;
+        classContainer.appendChild(card);
+      });
+
+      // Bind delete class buttons
+      classContainer.querySelectorAll(".btn-delete-class").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-id");
+          const name = state.classes.find(c => c.id === id)?.name;
+          if (confirm(`確定要刪除班級 ${name} (${id}) 嗎？該班級的所有配課與排課表都會被清空！`)) {
+            // Remove from classes
+            state.classes = state.classes.filter(c => c.id !== id);
+            // Remove assignments
+            state.assignments = state.assignments.filter(a => a.classId !== id);
+            // Clear schedule
+            state.schedule = null;
+            saveAppState(state);
+            renderCurrentTab();
+            showConsoleLog(`已手動刪除班級 ${name} (${id})`);
+          }
+        });
+      });
+    }
   }
 
   // Render Rooms limit list
@@ -687,16 +784,140 @@ function closeAllModals() {
   });
 }
 
+function openClassModal() {
+  const modal = document.getElementById("modal-class");
+  const form = document.getElementById("form-class");
+  form.reset();
+  modal.classList.add("open");
+  lucide.createIcons();
+}
+
+function handleClassFormSubmit(e) {
+  e.preventDefault();
+  const id = document.getElementById("class-id").value.trim();
+  const name = document.getElementById("class-name").value.trim();
+  const grade = parseInt(document.getElementById("class-grade").value);
+
+  if (state.classes.some(c => c.id === id)) {
+    alert("班級 ID 已存在！請使用其他 ID。");
+    return;
+  }
+
+  const newClassObj = { id, name, grade };
+  state.classes.push(newClassObj);
+
+  // Initialize assignments for this class
+  const classSubjects = state.subjects.filter(s => s.grade === grade);
+
+  classSubjects.forEach(tmpl => {
+    state.assignments.push({
+      id: `${id}-${tmpl.subject}`,
+      classId: id,
+      subject: tmpl.subject,
+      weeklyHours: tmpl.weeklyHours,
+      teacherId: "",
+      requiresRoom: tmpl.requiresRoom
+    });
+  });
+
+  // Force schedule clear because constraints changed
+  state.schedule = null;
+  saveAppState(state);
+  closeAllModals();
+  renderCurrentTab();
+  showConsoleLog(`已成功手動新增班級 ${name} (${id})`);
+}
+
 // ----------------------------------------------------
 // CSV IMPORT FUNCTIONS
 // ----------------------------------------------------
 let tempImportTeachers = []; // Holds list before saving
+let tempImportClasses = [];  // Holds list before saving
 
 function handleCSVSelect(e) {
   const file = e.target.files[0];
   if (file) {
     processCSVFile(file);
   }
+}
+
+function handleClassCSVSelect(e) {
+  const file = e.target.files[0];
+  if (file) {
+    processClassCSVFile(file);
+  }
+}
+
+function processClassCSVFile(file) {
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const text = evt.target.result;
+    try {
+      tempImportClasses = parseClassCSV(text);
+      if (tempImportClasses.length === 0) {
+        alert("無法從 CSV 檔案解析出有效的班級名單。請檢查格式是否符合。");
+        return;
+      }
+      showClassCSVPreviewModal();
+    } catch (err) {
+      alert("讀取 CSV 檔案出錯，請確認編碼為 UTF-8 或格式正確。");
+      console.error(err);
+    }
+  };
+  reader.readAsText(file, "UTF-8");
+}
+
+function showClassCSVPreviewModal() {
+  const modal = document.getElementById("modal-class-import-confirm");
+  const tbody = document.getElementById("class-csv-preview-tbody");
+  tbody.innerHTML = "";
+
+  tempImportClasses.forEach(c => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${c.id}</strong></td>
+      <td>${c.name}</td>
+      <td>${c.grade} 年級</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  modal.classList.add("open");
+
+  const confirmBtn = document.getElementById("btn-class-csv-confirm-save");
+  confirmBtn.onclick = function() {
+    tempImportClasses.forEach(newC => {
+      const idx = state.classes.findIndex(c => c.id === newC.id);
+      if (idx !== -1) {
+        state.classes[idx] = newC;
+      } else {
+        state.classes.push(newC);
+      }
+
+      // Automatically initialize assignments for this class
+      const classSubjects = state.subjects.filter(s => s.grade === newC.grade);
+
+      classSubjects.forEach(tmpl => {
+        const exists = state.assignments.some(a => a.classId === newC.id && a.subject === tmpl.subject);
+        if (!exists) {
+          state.assignments.push({
+            id: `${newC.id}-${tmpl.subject}`,
+            classId: newC.id,
+            subject: tmpl.subject,
+            weeklyHours: tmpl.weeklyHours,
+            teacherId: "",
+            requiresRoom: tmpl.requiresRoom
+          });
+        }
+      });
+    });
+
+    state.schedule = null;
+    saveAppState(state);
+    closeAllModals();
+    renderCurrentTab();
+    showConsoleLog(`成功批次匯入 ${tempImportClasses.length} 個班級名單，課表已重置。`);
+  };
 }
 
 function processCSVFile(file) {
@@ -780,7 +1001,51 @@ function downloadCSVTemplate() {
   
   const a = document.createElement("a");
   a.href = url;
-  a.setAttribute("download", "智慧排課_教師匯入範本.csv");
+  a.setAttribute("download", "智慧排課_教師匯入範本_完整.csv");
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function downloadTeacherMinCSVTemplate() {
+  const header = "姓名,身分職務\n";
+  const rows = [
+    "陳主任,主任",
+    "王組長,組長",
+    "李組長,組長",
+    "鄭老師,導師",
+    "戴體育,科任",
+    "鐘音樂,鐘點"
+  ].join("\n");
+  
+  const csvContent = "\uFEFF" + header + rows;
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement("a");
+  a.href = url;
+  a.setAttribute("download", "智慧排課_教師匯入範本_極簡.csv");
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function downloadClassCSVTemplate() {
+  const header = "班級ID,班級名稱,年級\n";
+  const rows = [
+    "101,101 班,1",
+    "102,102 班,1",
+    "301,301 班,3",
+    "501,501 班,5"
+  ].join("\n");
+  
+  const csvContent = "\uFEFF" + header + rows;
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement("a");
+  a.href = url;
+  a.setAttribute("download", "智慧排課_班級匯入範本.csv");
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -822,19 +1087,15 @@ function renderClassAssignments() {
   tbody.innerHTML = "";
 
   // Get subjects template based on grade level
-  let gradeType = "low";
-  if (cls.grade >= 3 && cls.grade <= 4) gradeType = "mid";
-  if (cls.grade >= 5) gradeType = "high";
-
-  const subjects = SUBJECTS_MATRIX[gradeType];
-  const targetHours = cls.grade <= 2 ? 23 : (cls.grade <= 4 ? 29 : 32);
+  const classSubjects = state.subjects.filter(s => s.grade === cls.grade);
+  const targetHours = classSubjects.reduce((sum, s) => sum + s.weeklyHours, 0);
   
   document.getElementById("class-target-hours").textContent = targetHours;
 
   // Compute current total hours assigned for this class
   let currentAssigned = 0;
   
-  subjects.forEach(tmpl => {
+  classSubjects.forEach(tmpl => {
     // Find if an assignment exists in state
     let assign = state.assignments.find(a => a.classId === classId && a.subject === tmpl.subject);
     
@@ -941,13 +1202,14 @@ function renderClassAssignments() {
   });
 
   // Update tabs header status
-  const check = validateAssignments(state.teachers, state.assignments);
+  const check = validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
   const tabProgressText = document.getElementById("assign-progress-text");
   const tabProgressBar = document.getElementById("bar-assign-progress-tab");
-  const progressPercent = Math.round((check.totalAssigned / 429) * 100);
+  const targetHours = check.totalTargetHours || 1;
+  const progressPercent = Math.min(100, Math.round((check.totalAssigned / targetHours) * 100));
   
   if (tabProgressText && tabProgressBar) {
-    tabProgressText.textContent = `${check.totalAssigned} / 429 節 (${progressPercent}%)`;
+    tabProgressText.textContent = `${check.totalAssigned} / ${check.totalTargetHours} 節 (${progressPercent}%)`;
     tabProgressBar.style.width = `${progressPercent}%`;
   }
 }
@@ -959,7 +1221,7 @@ function renderTeacherLoadsSidebar() {
   container.innerHTML = "";
   
   // Re-run validation to get up-to-date hours
-  validateAssignments(state.teachers, state.assignments);
+  validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
 
   const roleLabels = { director: "主任", leader: "組長", homeroom: "導師", subject: "科任", hourly: "鐘點" };
 
@@ -1001,15 +1263,12 @@ function autoAssignHomeroomTeachers() {
     if (!teacher) return;
 
     // Get subjects template
-    let gradeType = "low";
-    if (c.grade >= 3 && c.grade <= 4) gradeType = "mid";
-    if (c.grade >= 5) gradeType = "high";
-    const subjects = SUBJECTS_MATRIX[gradeType];
+    const classSubjects = state.subjects.filter(s => s.grade === c.grade);
 
     // Homeroom teaches Core subjects: 國語, 數學, 生活 (低年級), 社會 (中高), 綜合, 健康, 閱讀, 彈性
     const homeroomSubjects = ["國語", "數學", "生活", "社會", "綜合", "健康", "閱讀", "彈性"];
 
-    subjects.forEach(tmpl => {
+    classSubjects.forEach(tmpl => {
       if (homeroomSubjects.includes(tmpl.subject)) {
         // Find or create assignment
         let assign = state.assignments.find(a => a.classId === c.id && a.subject === tmpl.subject);
@@ -1061,7 +1320,7 @@ function autoAssignSubjectTeachers() {
 
     if (candidates.length > 0) {
       // Recalculate workloads
-      validateAssignments(state.teachers, state.assignments);
+      validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
 
       // Sort candidates to select the one with most capacity
       candidates.sort((a, b) => {
@@ -1106,7 +1365,7 @@ function showConsoleLog(msg) {
 }
 
 function renderEngineView() {
-  const check = validateAssignments(state.teachers, state.assignments);
+  const check = validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
   
   const stepTotal = document.getElementById("check-step-total-hours");
   const stepTeacher = document.getElementById("check-step-teacher-errors");
@@ -1115,12 +1374,12 @@ function renderEngineView() {
 
   if (currentAssignedSpan) currentAssignedSpan.textContent = check.totalAssigned;
 
-  if (check.totalAssigned === 429) {
+  if (check.totalAssigned === check.totalTargetHours) {
     stepTotal.className = "ok";
-    stepTotal.innerHTML = `<i data-lucide="check-circle" class="icon-small text-success"></i> 全校配課已達 429 節 (目前: 429/429 節)`;
+    stepTotal.innerHTML = `<i data-lucide="check-circle" class="icon-small text-success"></i> 全校配課已達 ${check.totalTargetHours} 節 (目前: ${check.totalAssigned}/${check.totalTargetHours} 節)`;
   } else {
     stepTotal.className = "fail";
-    stepTotal.innerHTML = `<i data-lucide="x-circle" class="icon-small text-danger"></i> 全校配課未達 429 節 (目前: ${check.totalAssigned}/429 節)`;
+    stepTotal.innerHTML = `<i data-lucide="x-circle" class="icon-small text-danger"></i> 全校配課未達 ${check.totalTargetHours} 節 (目前: ${check.totalAssigned}/${check.totalTargetHours} 節)`;
   }
 
   // Teacher warnings are soft warnings (do not block scheduler, but alert user)
@@ -1157,9 +1416,9 @@ function renderEngineView() {
 }
 
 function startSchedulingEngine() {
-  const check = validateAssignments(state.teachers, state.assignments);
-  if (check.totalAssigned < 429) {
-    alert(`配課尚未完成！目前已配 ${check.totalAssigned} 節，還剩 ${429 - check.totalAssigned} 節未完成指派教師。請先到「線上互動配課」指派所有教師後，再啟動排課。`);
+  const check = validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
+  if (check.totalAssigned < check.totalTargetHours) {
+    alert(`配課尚未完成！目前已配 ${check.totalAssigned} 節，還剩 ${check.totalTargetHours - check.totalAssigned} 節未完成指派教師。請先到「線上互動配課」指派所有教師後，再啟動排課。`);
     return;
   }
 
@@ -1649,6 +1908,9 @@ function importSystemData(e) {
       const imported = JSON.parse(evt.target.result);
       if (imported.teachers && imported.classes && imported.assignments) {
         state = imported;
+        if (!state.subjects) {
+          state.subjects = [...DEFAULT_SUBJECTS];
+        }
         saveAppState(state);
         renderCurrentTab();
         alert("系統資料匯入成功！");
@@ -1779,4 +2041,262 @@ function exportTimetableToExcel() {
 
   // Write Excel file
   XLSX.writeFile(wb, "國小智慧自動排課系統_全校課表.xlsx");
+}
+
+// ----------------------------------------------------
+// SUBJECTS MANAGEMENT FUNCTIONS
+// ----------------------------------------------------
+function renderSubjects() {
+  const tbody = document.getElementById("subject-list-tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  const query = document.getElementById("search-subject")?.value.trim().toLowerCase() || "";
+  
+  const gradeHours = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+  state.subjects.forEach(s => {
+    if (gradeHours[s.grade] !== undefined) {
+      gradeHours[s.grade] += s.weeklyHours;
+    }
+  });
+
+  const warnings = [];
+  const limits = { 1: 23, 2: 23, 3: 29, 4: 29, 5: 32, 6: 32 };
+  for (let g = 1; g <= 6; g++) {
+    if (gradeHours[g] > limits[g]) {
+      warnings.push(`${g} 年級總配課節數 (${gradeHours[g]} 節) 已超出排課時段上限 (${limits[g]} 節)，這將導致自動排課無解！`);
+    }
+  }
+
+  const warningDiv = document.getElementById("subject-hours-warning");
+  const warningMsg = document.getElementById("subject-warning-message");
+  if (warningDiv && warningMsg) {
+    if (warnings.length > 0) {
+      warningDiv.style.display = "flex";
+      warningMsg.innerHTML = warnings.join("<br>");
+    } else {
+      warningDiv.style.display = "none";
+    }
+  }
+
+  const filtered = state.subjects.filter(s => {
+    const matchName = s.subject.toLowerCase().includes(query);
+    const matchGrade = `${s.grade}`.includes(query) || `${s.grade}年級`.includes(query);
+    return matchName || matchGrade;
+  });
+
+  filtered.sort((a, b) => a.grade - b.grade || a.subject.localeCompare(b.subject));
+
+  filtered.forEach(s => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${s.grade} 年級</strong></td>
+      <td>${s.subject}</td>
+      <td>${s.weeklyHours} 節</td>
+      <td>${s.requiresRoom ? `<span class="badge badge-primary">${s.requiresRoom}教室</span>` : '無'}</td>
+      <td>
+        <button class="btn-delete-subject btn-danger btn-icon-only" data-id="${s.id}" title="刪除科目">
+          <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll(".btn-delete-subject").forEach(btn => {
+    btn.onclick = function() {
+      const id = btn.getAttribute("data-id");
+      if (confirm("確定要刪除此科目設定嗎？這會一併刪除全校各班級該科目的授課配課資料。")) {
+        deleteSubject(id);
+      }
+    };
+  });
+
+  lucide.createIcons();
+}
+
+function deleteSubject(id) {
+  const index = state.subjects.findIndex(s => s.id === id);
+  if (index !== -1) {
+    const target = state.subjects[index];
+    state.subjects.splice(index, 1);
+    
+    state.assignments = state.assignments.filter(a => {
+      const cls = state.classes.find(c => c.id === a.classId);
+      if (cls && cls.grade === target.grade && a.subject === target.subject) {
+        return false;
+      }
+      return true;
+    });
+
+    state.schedule = null;
+    saveAppState(state);
+    renderSubjects();
+    showConsoleLog(`已刪除科目設定: ${target.grade}年級 ${target.subject}`);
+  }
+}
+
+function openSubjectModal() {
+  const modal = document.getElementById("modal-subject");
+  document.getElementById("form-subject").reset();
+  modal.classList.add("open");
+}
+
+function handleSubjectFormSubmit(e) {
+  e.preventDefault();
+  const grade = parseInt(document.getElementById("subject-grade").value);
+  const name = document.getElementById("subject-name").value.trim();
+  const hours = parseInt(document.getElementById("subject-hours").value);
+  const room = document.getElementById("subject-room").value || null;
+
+  if (!name || isNaN(grade) || isNaN(hours)) return;
+
+  const subjectId = `${grade}-${name}`;
+  const existingIndex = state.subjects.findIndex(s => s.id === subjectId);
+  
+  const newSub = {
+    id: subjectId,
+    grade: grade,
+    subject: name,
+    weeklyHours: hours,
+    requiresRoom: room
+  };
+
+  if (existingIndex !== -1) {
+    state.subjects[existingIndex] = newSub;
+  } else {
+    state.subjects.push(newSub);
+  }
+
+  state.classes.forEach(c => {
+    if (c.grade === grade) {
+      let assign = state.assignments.find(a => a.classId === c.id && a.subject === name);
+      if (assign) {
+        assign.weeklyHours = hours;
+        assign.requiresRoom = room;
+      } else {
+        state.assignments.push({
+          id: `${c.id}-${name}`,
+          classId: c.id,
+          subject: name,
+          weeklyHours: hours,
+          teacherId: "",
+          requiresRoom: room
+        });
+      }
+    }
+  });
+
+  state.schedule = null;
+  saveAppState(state);
+  closeAllModals();
+  renderSubjects();
+  showConsoleLog(`手動儲存科目: ${grade}年級 ${name} (${hours} 節)`);
+}
+
+let tempImportSubjects = [];
+
+function handleSubjectCSVSelect(e) {
+  const file = e.target.files[0];
+  if (file) {
+    processSubjectCSVFile(file);
+  }
+}
+
+function processSubjectCSVFile(file) {
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const text = evt.target.result;
+    try {
+      tempImportSubjects = parseSubjectCSV(text);
+      if (tempImportSubjects.length === 0) {
+        alert("無法從 CSV 檔案解析出有效的科目設定。請檢查格式是否符合。");
+        return;
+      }
+      showSubjectCSVPreviewModal();
+    } catch (err) {
+      alert("讀取 CSV 檔案出錯，請確認編碼為 UTF-8 或格式正確。");
+      console.error(err);
+    }
+  };
+  reader.readAsText(file, "UTF-8");
+}
+
+function showSubjectCSVPreviewModal() {
+  const modal = document.getElementById("modal-subject-import-confirm");
+  const tbody = document.getElementById("subject-csv-preview-tbody");
+  tbody.innerHTML = "";
+
+  tempImportSubjects.forEach(s => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${s.grade} 年級</strong></td>
+      <td>${s.subject}</td>
+      <td>${s.weeklyHours} 節</td>
+      <td>${s.requiresRoom || '無'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  modal.classList.add("open");
+
+  const confirmBtn = document.getElementById("btn-subject-csv-confirm-save");
+  confirmBtn.onclick = function() {
+    tempImportSubjects.forEach(newS => {
+      const idx = state.subjects.findIndex(s => s.id === newS.id);
+      if (idx !== -1) {
+        state.subjects[idx] = newS;
+      } else {
+        state.subjects.push(newS);
+      }
+
+      state.classes.forEach(c => {
+        if (c.grade === newS.grade) {
+          let assign = state.assignments.find(a => a.classId === c.id && a.subject === newS.subject);
+          if (assign) {
+            assign.weeklyHours = newS.weeklyHours;
+            assign.requiresRoom = newS.requiresRoom;
+          } else {
+            state.assignments.push({
+              id: `${c.id}-${newS.subject}`,
+              classId: c.id,
+              subject: newS.subject,
+              weeklyHours: newS.weeklyHours,
+              teacherId: "",
+              requiresRoom: newS.requiresRoom
+            });
+          }
+        }
+      });
+    });
+
+    state.schedule = null;
+    saveAppState(state);
+    closeAllModals();
+    renderSubjects();
+    showConsoleLog(`成功批次匯入 ${tempImportSubjects.length} 個科目設定，課表已重置。`);
+  };
+}
+
+function downloadSubjectCSVTemplate() {
+  const header = "年級,科目名稱,每週節數,特殊教室\n";
+  const rows = [
+    "1,國語,6,",
+    "1,數學,3,",
+    "1,生活,6,",
+    "3,自然,3,自然",
+    "3,電腦,1,電腦",
+    "5,英語,3,"
+  ].join("\n");
+  
+  const csvContent = "\uFEFF" + header + rows;
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement("a");
+  a.href = url;
+  a.setAttribute("download", "智慧排課_科目匯入範本.csv");
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }

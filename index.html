@@ -75,9 +75,13 @@
             <span>匯入系統資料</span>
           </button>
           <input type="file" id="import-data-file" accept=".json" style="display: none;">
-          <button id="btn-reset-system" class="btn btn-danger btn-icon-text">
+          <button id="btn-reset-system" class="btn btn-secondary btn-icon-text">
             <i data-lucide="rotate-ccw"></i>
             <span>重置預設值</span>
+          </button>
+          <button id="btn-clear-all-data" class="btn btn-danger btn-icon-text">
+            <i data-lucide="trash-2"></i>
+            <span>清空所有資料</span>
           </button>
         </div>
       </header>
@@ -194,6 +198,7 @@
           <div class="tabs-sub">
             <button class="tab-sub-btn active" data-sub-tab="teachers">教師清單管理</button>
             <button class="tab-sub-btn" data-sub-tab="classes">班級與專科教室</button>
+            <button class="tab-sub-btn" data-sub-tab="subjects">科目設定管理</button>
           </div>
 
           <!-- Sub-Tab: Teachers -->
@@ -221,7 +226,34 @@
               <i data-lucide="file-up" class="drop-icon"></i>
               <p>拖曳教師名單 CSV 檔案至此，或 <strong>點此選擇檔案</strong></p>
               <span>支援欄位格式：教師編號, 姓名, 身分職務, 基本節數, 帶班班級, 專長科目</span>
-              <a href="#" id="download-csv-template" class="mt-2 text-link">下載範本格式 CSV</a>
+            </div>
+
+            <!-- Independent Templates Downloads Panel -->
+            <div class="panel glass mb-4 p-4">
+              <div class="flex-justify-between flex-wrap gap-4">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="download-cloud" class="text-primary" style="width: 20px; height: 20px;"></i>
+                  <span class="font-bold">下載 CSV 匯入範本檔：</span>
+                </div>
+                <div class="button-group flex-wrap">
+                  <button id="btn-download-teacher-min" class="btn btn-secondary btn-icon-text" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                    <i data-lucide="download" style="width: 14px; height: 14px;"></i>
+                    <span>教師名單 (極簡：姓名/職位)</span>
+                  </button>
+                  <button id="btn-download-teacher-full" class="btn btn-secondary btn-icon-text" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                    <i data-lucide="download" style="width: 14px; height: 14px;"></i>
+                    <span>教師名單 (完整格式)</span>
+                  </button>
+                  <button id="btn-download-class-tmpl" class="btn btn-secondary btn-icon-text" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                    <i data-lucide="download" style="width: 14px; height: 14px;"></i>
+                    <span>班級名單範本</span>
+                  </button>
+                  <button id="btn-download-subject-tmpl" class="btn btn-secondary btn-icon-text" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                    <i data-lucide="download" style="width: 14px; height: 14px;"></i>
+                    <span>科目名單範本</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div class="panel glass">
@@ -251,8 +283,19 @@
           <div id="sub-tab-classes" class="sub-tab-pane">
             <div class="grid grid-2">
               <div class="panel glass">
-                <div class="panel-header">
-                  <h3><i data-lucide="home" class="panel-icon"></i> 全校 15 班級列表</h3>
+                <div class="panel-header flex-justify-between">
+                  <h3><i data-lucide="home" class="panel-icon"></i> 班級列表</h3>
+                  <div class="button-group">
+                    <button id="btn-add-class" class="btn btn-primary btn-icon-text" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                      <i data-lucide="plus" style="width: 14px; height: 14px;"></i>
+                      <span>手動新增班級</span>
+                    </button>
+                    <button id="btn-import-class" class="btn btn-secondary btn-icon-text" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                      <i data-lucide="file-spreadsheet" style="width: 14px; height: 14px;"></i>
+                      <span>匯入班級 CSV</span>
+                    </button>
+                    <input type="file" id="class-csv-file-input" accept=".csv" style="display: none;">
+                  </div>
                 </div>
                 <div class="panel-body">
                   <div class="class-grid" id="class-cards-container">
@@ -281,6 +324,51 @@
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sub-Tab: Subjects -->
+          <div id="sub-tab-subjects" class="sub-tab-pane">
+            <div class="action-bar mb-4">
+              <div class="search-box">
+                <i data-lucide="search"></i>
+                <input type="text" id="search-subject" placeholder="搜尋科目名稱或年級...">
+              </div>
+              <div class="button-group">
+                <button id="btn-add-subject" class="btn btn-primary btn-icon-text">
+                  <i data-lucide="plus"></i>
+                  <span>手動新增科目</span>
+                </button>
+                <button id="btn-import-subject-csv" class="btn btn-secondary btn-icon-text">
+                  <i data-lucide="file-spreadsheet"></i>
+                  <span>匯入科目 CSV</span>
+                </button>
+                <input type="file" id="subject-csv-file-input" accept=".csv" style="display: none;">
+              </div>
+            </div>
+
+            <div id="subject-hours-warning" class="alert alert-info mb-4" style="display: none;">
+              <i data-lucide="alert-triangle" class="alert-icon text-warning"></i>
+              <span id="subject-warning-message"></span>
+            </div>
+
+            <div class="panel glass">
+              <div class="panel-body p-0">
+                <table class="table" id="table-subjects">
+                  <thead>
+                    <tr>
+                      <th>年級級別</th>
+                      <th>科目名稱</th>
+                      <th>每週節數</th>
+                      <th>需要專科教室</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="subject-list-tbody">
+                    <!-- Dynamic -->
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -590,6 +678,153 @@
       <div class="modal-footer">
         <button class="btn btn-secondary btn-close-modal">取消</button>
         <button id="btn-csv-confirm-save" class="btn btn-primary">確認匯入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2b. Class CSV Import Dialog -->
+  <div class="modal" id="modal-class-import-confirm">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <h3>確認 CSV 匯入班級</h3>
+        <button class="btn-close-modal"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-4">系統即將匯入以下班級資料，這將覆蓋現有相同 ID 的班級，並為新班級自動配置未指派教師的預設課務：</p>
+        <div class="table-preview-wrapper max-h-60 overflow-y">
+          <table class="table table-preview">
+            <thead>
+              <tr>
+                <th>班級 ID</th>
+                <th>班級名稱</th>
+                <th>年級級別</th>
+              </tr>
+            </thead>
+            <tbody id="class-csv-preview-tbody">
+              <!-- Generated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-close-modal">取消</button>
+        <button id="btn-class-csv-confirm-save" class="btn btn-primary">確認匯入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Class Manual Add Dialog -->
+  <div class="modal" id="modal-class">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <h3>手動新增班級</h3>
+        <button class="btn-close-modal"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <form id="form-class">
+          <div class="form-group mb-4">
+            <label class="form-label" for="class-id">班級 ID (如 101, 302, 501)</label>
+            <input type="text" id="class-id" class="input-field" required placeholder="101">
+          </div>
+          <div class="form-group mb-4">
+            <label class="form-label" for="class-name">班級名稱 (如 101 班)</label>
+            <input type="text" id="class-name" class="input-field" required placeholder="101 班">
+          </div>
+          <div class="form-group mb-4">
+            <label class="form-label" for="class-grade">年級 (1-6)</label>
+            <select id="class-grade" class="select-field" required>
+              <option value="1">1 年級</option>
+              <option value="2">2 年級</option>
+              <option value="3">3 年級</option>
+              <option value="4">4 年級</option>
+              <option value="5">5 年級</option>
+              <option value="6">6 年級</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-close-modal">取消</button>
+        <button type="submit" form="form-class" class="btn btn-primary">儲存班級</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Subject Manual Add Dialog -->
+  <div class="modal" id="modal-subject">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <h3>手動新增科目</h3>
+        <button class="btn-close-modal"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <form id="form-subject">
+          <div class="form-group mb-4">
+            <label class="form-label" for="subject-grade">年級 (1-6)</label>
+            <select id="subject-grade" class="select-field" required>
+              <option value="1">1 年級</option>
+              <option value="2">2 年級</option>
+              <option value="3">3 年級</option>
+              <option value="4">4 年級</option>
+              <option value="5">5 年級</option>
+              <option value="6">6 年級</option>
+            </select>
+          </div>
+          <div class="form-group mb-4">
+            <label class="form-label" for="subject-name">科目名稱</label>
+            <input type="text" id="subject-name" class="input-field" required placeholder="例如: 國語">
+          </div>
+          <div class="form-group mb-4">
+            <label class="form-label" for="subject-hours">每週節數</label>
+            <input type="number" id="subject-hours" class="input-field" required min="1" max="15" placeholder="5">
+          </div>
+          <div class="form-group mb-4">
+            <label class="form-label" for="subject-room">需要專科教室 (可選)</label>
+            <select id="subject-room" class="select-field">
+              <option value="">-- 不需要 --</option>
+              <option value="電腦">電腦教室</option>
+              <option value="體育">體育館</option>
+              <option value="音樂">音樂教室</option>
+              <option value="美勞">美勞教室</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-close-modal">取消</button>
+        <button type="submit" form="form-subject" class="btn btn-primary">儲存科目</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Subject CSV Import Confirm Dialog -->
+  <div class="modal" id="modal-subject-import-confirm">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <h3>確認 CSV 匯入科目</h3>
+        <button class="btn-close-modal"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-4">系統即將匯入以下科目資料，這將覆蓋現有相同年級與名稱的科目，並自動配置各班級對應的未指派課務：</p>
+        <div class="table-preview-wrapper max-h-60 overflow-y">
+          <table class="table table-preview">
+            <thead>
+              <tr>
+                <th>年級</th>
+                <th>科目名稱</th>
+                <th>每週節數</th>
+                <th>特殊教室</th>
+              </tr>
+            </thead>
+            <tbody id="subject-csv-preview-tbody">
+              <!-- Generated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-close-modal">取消</button>
+        <button id="btn-subject-csv-confirm-save" class="btn btn-primary">確認匯入</button>
       </div>
     </div>
   </div>

@@ -1,3 +1,104 @@
+## [2026-07-28 17:42:00] - 實作動態科目設定管理與配課模組重構
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 加入科目設定功能，系統的科目由使用者自行匯入，並且可以指定是哪個年級
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在 `data.js` 中新增 `parseSubjectCSV(csvText)` 支援年級、科目、每週節數及教室的欄位解析。
+    *   在 `data.js` 中重構 `getInitialState()`：將寫死的 `SUBJECTS_MATRIX` 改為扁平化陣列並存入 `state.subjects` 中作為預設基礎資料。
+    *   在 `data.js` 中重構 `validateAssignments`，計算全校各班級在 `state.subjects` 中所定義該年級的授課節數總和，使總授課節數指標完全動態化。
+    *   在 `index.html` 中新增「科目設定管理」子分頁與「手動新增科目」、「匯入科目 CSV」按鈕、對應 Modal 及 CSV 預覽 Modal。
+    *   在 `app.js` 中重構「線上配課」、「一鍵自動配課」與「課表初始化」功能，使其全面讀取 `state.subjects` 的資料進行指派。
+    *   在 `app.js` 中實作手動新增科目、刪除科目與匯入科目 CSV 功能。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `data.js`: 重構預設狀態架構與節數驗證函式，新增 `parseSubjectCSV`。
+    *   `[MODIFIED]` `index.html`: 新增科目管理 UI 區塊與彈出視窗。
+    *   `[MODIFIED]` `app.js`: 重構配課指派演算法與 UI 連動，實作科目 CSV 匯入與增刪處理器。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 17:40:00] - 將 CSV 範本下載功能自拖曳區抽離為獨立區塊
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 下載範本檔案的功能要獨立
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在 `index.html` 中，將「下載範本格式 CSV」從拖曳上傳區 (`#csv-drop-zone`) 的 DOM 結構內部移出，並改在外部新增一個獨立的「下載 CSV 匯入範本」控制區塊，提供：
+        1. 教師名單極簡範本 (姓名、職位)
+        2. 教師名單完整範本 (含專長等)
+        3. 班級清單範本
+    *   在 `app.js` 中重構與綁定這些獨立範本下載按鈕的事件處理常式。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 重構教師與班級設定視圖，新增獨立的範本下載按鈕組，並從拖曳區中移除下載連結。
+    *   `[MODIFIED]` `app.js`: 新增並重構 `downloadClassCSVTemplate` 及 `downloadTeacherMinimalCSVTemplate` 的下載觸發邏輯。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 17:39:00] - [Self-Correction / Bugfix] 修正 CSV 範本下載連結冒泡觸發檔案選擇問題
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 點選下載範本格式CSV會直接啟動匯入檔案選擇，而不是下載。
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在 `app.js` 的 `#download-csv-template` 點擊事件處理常式中加入 `e.stopPropagation()`，防止點擊事件冒泡至父元素 `#csv-drop-zone` 導致重複觸發隱藏的 file input 檔案選擇視窗。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `app.js`: 於下載範本連結事件中加入 `e.stopPropagation()`。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 17:38:00] - 建立 CSV 匯入範本檔案
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 提供匯入CSV範本檔
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在專案根目錄中建立「教師匯入範本_極簡.csv」、「教師匯入範本_完整.csv」以及「班級匯入範本.csv」，供使用者手動測試匯入流程。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[CREATED]` `教師匯入範本_極簡.csv`: 簡易版教師 CSV 範本。
+    *   `[CREATED]` `教師匯入範本_完整.csv`: 完整版教師 CSV 範本。
+    *   `[CREATED]` `班級匯入範本.csv`: 班級清單 CSV 範本。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 17:35:00] - 新增「班級 CSV 匯入」與「智慧相容教師清單 CSV 匯入」功能
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 加入可以匯入班級、教師清單（姓名、職位）
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在 `data.js` 中實作 `parseClassCSV(csvText)`，支援多種欄位排列與自動偵測標頭（含年級自動推導），將解析後的班級匯入系統並自動初始化全校配課項目。
+    *   重構 `parseTeacherCSV(csvText)` 使其具備智慧型相容模式：自動識別是否有標頭列。若有標頭，依關鍵字定位；若無標頭且格式簡化（例如只有姓名與職位），自動按欄位數對齊並循序生成教師 ID（T001...）。
+    *   在 `index.html` 中為班級列表新增「匯入班級 CSV」按鈕，並設計確認預覽 Modal。
+    *   在 `app.js` 中實現匯入班級 CSV 的處理常式與 UI 事件綁定。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `data.js`: 新增 `parseClassCSV` 並重構 `parseTeacherCSV` 以相容簡化格式與無標頭 CSV。
+    *   `[MODIFIED]` `index.html`: 新增班級 CSV 檔案選擇與上傳按鈕，並為班級匯入設計預覽對話框。
+    *   `[MODIFIED]` `app.js`: 綁定班級 CSV 匯入按鈕與預覽確認邏輯。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 17:28:00] - 新增「清空所有資料」與「手動新增/刪除班級」功能
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 加入清空所有資料：班級、教師，後續由使用者建立
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在 `index.html` 中新增「清空所有資料」按鈕，以及「手動新增班級」的 Modal 對話框。
+    *   在 `app.js` 中實作「清空所有資料」功能，會重設教師、班級、配課、排課表為空值，並存檔。
+    *   在 `app.js` 中實作手動新增班級功能，新增班級時自動載入對應年級的課務預設配課（但教師設為未指派），供後續進行線上配課。
+    *   在 `app.js` 的班級卡片上新增「刪除」按鈕，讓使用者可以單獨移除特定班級。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 新增清空按鈕與新增班級對話框。
+    *   `[MODIFIED]` `app.js`: 新增清空資料、新增班級、刪除班級與對應的 UI 事件綁定。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
 ## [2026-07-28 17:15:00] - 修正線上配課匹配進度與清空邏輯
 
 *   **使用者提示詞 / 需求 (User Prompt):**
