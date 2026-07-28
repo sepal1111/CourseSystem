@@ -27,6 +27,17 @@ let draggedElement = null;
 let dragSourceSlot = null; // { day, period }
 let dragSourceClass = null;
 
+// Helper for safe Lucide icons creation
+function safeCreateIcons() {
+  if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') {
+    try {
+      lucide.createIcons();
+    } catch (e) {
+      console.warn("Lucide createIcons failed:", e);
+    }
+  }
+}
+
 // Initialize app on DOM Content Loaded
 document.addEventListener("DOMContentLoaded", () => {
   // Load saved state or use initial state
@@ -34,12 +45,20 @@ document.addEventListener("DOMContentLoaded", () => {
   if (savedState) {
     state = savedState;
     let dirty = false;
-    if (!state.subjects) {
-      state.subjects = [...DEFAULT_SUBJECTS];
+    const initial = getInitialState();
+    if (!state.teachers || !Array.isArray(state.teachers) || state.teachers.length === 0) {
+      state.teachers = initial.teachers;
       dirty = true;
     }
-    if (!state.assignments || state.assignments.length === 0) {
-      const initial = getInitialState();
+    if (!state.classes || !Array.isArray(state.classes) || state.classes.length === 0) {
+      state.classes = initial.classes;
+      dirty = true;
+    }
+    if (!state.subjects || !Array.isArray(state.subjects) || state.subjects.length === 0) {
+      state.subjects = initial.subjects;
+      dirty = true;
+    }
+    if (!state.assignments || !Array.isArray(state.assignments) || state.assignments.length === 0) {
       state.assignments = initial.assignments;
       dirty = true;
     }
@@ -262,7 +281,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Initialize Lucide Icons
-  lucide.createIcons();
+  safeCreateIcons();
 
   // Load first tab view
   renderCurrentTab();
@@ -329,7 +348,7 @@ function renderCurrentTab() {
   }
 
   // Update icons
-  lucide.createIcons();
+  safeCreateIcons();
 }
 
 // ----------------------------------------------------
@@ -514,7 +533,7 @@ function renderTeachersTable(filterQuery = "") {
     });
   });
 
-  lucide.createIcons();
+  safeCreateIcons();
 }
 
 function renderClassesAndRooms() {
@@ -663,7 +682,7 @@ function openTeacherModal(teacherId = null) {
   renderBusySlotsSelectorGrid();
 
   modal.classList.add("open");
-  lucide.createIcons();
+  safeCreateIcons();
 }
 
 function toggleHomeroomClassInput(role) {
@@ -789,7 +808,7 @@ function openClassModal() {
   const form = document.getElementById("form-class");
   form.reset();
   modal.classList.add("open");
-  lucide.createIcons();
+  safeCreateIcons();
 }
 
 function handleClassFormSubmit(e) {
@@ -1088,9 +1107,9 @@ function renderClassAssignments() {
 
   // Get subjects template based on grade level
   const classSubjects = state.subjects.filter(s => s.grade === cls.grade);
-  const targetHours = classSubjects.reduce((sum, s) => sum + s.weeklyHours, 0);
+  const classTargetHours = classSubjects.reduce((sum, s) => sum + s.weeklyHours, 0);
   
-  document.getElementById("class-target-hours").textContent = targetHours;
+  document.getElementById("class-target-hours").textContent = classTargetHours;
 
   // Compute current total hours assigned for this class
   let currentAssigned = 0;
@@ -1205,8 +1224,8 @@ function renderClassAssignments() {
   const check = validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
   const tabProgressText = document.getElementById("assign-progress-text");
   const tabProgressBar = document.getElementById("bar-assign-progress-tab");
-  const targetHours = check.totalTargetHours || 1;
-  const progressPercent = Math.min(100, Math.round((check.totalAssigned / targetHours) * 100));
+  const overallTargetHours = check.totalTargetHours || 1;
+  const progressPercent = Math.min(100, Math.round((check.totalAssigned / overallTargetHours) * 100));
   
   if (tabProgressText && tabProgressBar) {
     tabProgressText.textContent = `${check.totalAssigned} / ${check.totalTargetHours} 節 (${progressPercent}%)`;
@@ -1412,7 +1431,7 @@ function renderEngineView() {
     stepBusy.innerHTML = `<i data-lucide="x-circle" class="icon-small text-danger"></i> 部分教師設定了過多忙碌時段 (${busyConflicts} 人)，可能導致引擎無解`;
   }
 
-  lucide.createIcons();
+  safeCreateIcons();
 }
 
 function startSchedulingEngine() {
@@ -1470,7 +1489,7 @@ function startSchedulingEngine() {
     } finally {
       btn.disabled = false;
       btn.innerHTML = `<i data-lucide="play-circle"></i> <span>啟動智慧自動排課</span>`;
-      lucide.createIcons();
+      safeCreateIcons();
     }
   }, 100);
 }
@@ -1538,7 +1557,7 @@ function renderTimetableGrid() {
       <i data-lucide="calendar-x" style="width: 3rem; height: 3rem; margin-bottom: 1rem; color: var(--warning-color);"></i>
       <p>目前尚無課表資料。請完成 100% 配課後，前往「自動排課引擎」生成課表！</p>
     </td></tr>`;
-    lucide.createIcons();
+    safeCreateIcons();
     return;
   }
 
@@ -1606,7 +1625,7 @@ function renderTimetableGrid() {
     enableDragAndDropEvents(targetId);
   }
 
-  lucide.createIcons();
+  safeCreateIcons();
 }
 
 function renderClassCell(td, classId, day, period) {
@@ -2112,7 +2131,7 @@ function renderSubjects() {
     };
   });
 
-  lucide.createIcons();
+  safeCreateIcons();
 }
 
 function deleteSubject(id) {

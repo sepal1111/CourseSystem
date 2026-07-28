@@ -1,3 +1,20 @@
+## [2026-07-28 20:04:00] - [Self-Correction / Bugfix] 修正 app.js 重複宣告 targetHours 語法錯誤
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 發佈到git pages後，左側功能區無法使用 / app.js:1208 Uncaught SyntaxError: Identifier 'targetHours' has already been declared
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在 `app.js` 的 `renderClassAssignments` 函式中，發現兩處重複宣告了 `const targetHours`（第 1091 行與第 1208 行），導致瀏覽器在載入腳本時報錯 `Uncaught SyntaxError: Identifier 'targetHours' has already been declared` 並中斷整個 `app.js` 模組的解析與執行，從而造成頁面所有 JS 事件與左側選單完全無反應。
+    *   將第 1091 行改為 `const classTargetHours`，並將第 1208 行改為 `const overallTargetHours`，徹底消除變更作用域重複宣告的 SyntaxError。
+    *   增加 `safeCreateIcons()` 安全調用封裝，避免 network 異常導致 CDN lucide script 載入失敗時丟出 Uncaught ReferenceError。
+    *   強化 `loadAppState()` 狀態還原防護，避免 LocalStorage 的舊資料缺少 `teachers` 或 `classes` 欄位引發執行階段錯誤。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `app.js`: 重新命名 `renderClassAssignments` 內部變數以修正 SyntaxError，並增強 LocalStorage 讀取與 Lucide 圖示調用防護。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次 Bug 修正歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
 ## [2026-07-28 17:42:00] - 實作動態科目設定管理與配課模組重構
 
 *   **使用者提示詞 / 需求 (User Prompt):**
