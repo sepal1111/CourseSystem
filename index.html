@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>國小智慧自動排課系統 🏫</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- SheetJS for Excel export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand">
+        <i data-lucide="graduation-cap" class="brand-icon"></i>
+        <div class="brand-text">
+          <h1>智慧排課系統</h1>
+          <span>Elementary School</span>
+        </div>
+      </div>
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="dashboard">
+          <i data-lucide="layout-dashboard"></i>
+          <span>系統儀表板</span>
+        </button>
+        <button class="nav-item" data-tab="settings">
+          <i data-lucide="users"></i>
+          <span>教師與班級設定</span>
+        </button>
+        <button class="nav-item" data-tab="assignments">
+          <i data-lucide="clipboard-list"></i>
+          <span>線上互動配課</span>
+        </button>
+        <button class="nav-item" data-tab="engine">
+          <i data-lucide="cpu"></i>
+          <span>自動排課引擎</span>
+        </button>
+        <button class="nav-item" data-tab="viewer">
+          <i data-lucide="calendar"></i>
+          <span>課表檢視與微調</span>
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <button id="theme-toggle" class="btn btn-icon-text">
+          <i data-lucide="sun" class="sun-icon"></i>
+          <i data-lucide="moon" class="moon-icon"></i>
+          <span id="theme-text">切換亮色模式</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top header -->
+      <header class="top-header">
+        <div class="page-title">
+          <h2 id="current-tab-title">系統儀表板</h2>
+          <p id="current-tab-desc">全校排課狀態、教師配課負擔與核心指標預覽</p>
+        </div>
+        <div class="header-actions">
+          <button id="btn-export-data" class="btn btn-secondary btn-icon-text">
+            <i data-lucide="download"></i>
+            <span>導出系統資料</span>
+          </button>
+          <button id="btn-import-data" class="btn btn-secondary btn-icon-text">
+            <i data-lucide="upload"></i>
+            <span>匯入系統資料</span>
+          </button>
+          <input type="file" id="import-data-file" accept=".json" style="display: none;">
+          <button id="btn-reset-system" class="btn btn-danger btn-icon-text">
+            <i data-lucide="rotate-ccw"></i>
+            <span>重置預設值</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- View Containers -->
+      <div class="view-container">
+        
+        <!-- Tab 1: Dashboard -->
+        <section id="tab-dashboard" class="tab-pane active">
+          <div class="grid grid-3">
+            <div class="stat-card glass animate-fade-in">
+              <div class="stat-header">
+                <span class="stat-label">配課總進度</span>
+                <i data-lucide="check-circle" class="stat-icon text-success"></i>
+              </div>
+              <div class="stat-value" id="stat-assign-progress">0%</div>
+              <div class="stat-desc" id="stat-assign-detail">已分配: 0 / 429 節</div>
+              <div class="progress-bar-container">
+                <div class="progress-bar" id="bar-assign-progress" style="width: 0%"></div>
+              </div>
+            </div>
+            
+            <div class="stat-card glass animate-fade-in" style="animation-delay: 0.1s;">
+              <div class="stat-header">
+                <span class="stat-label">排課狀態</span>
+                <i data-lucide="calendar-check" class="stat-icon text-primary"></i>
+              </div>
+              <div class="stat-value" id="stat-schedule-status">未排課</div>
+              <div class="stat-desc" id="stat-schedule-detail">需要先完成 100% 配課</div>
+              <div class="status-indicator warning" id="indicator-schedule"></div>
+            </div>
+
+            <div class="stat-card glass animate-fade-in" style="animation-delay: 0.2s;">
+              <div class="stat-header">
+                <span class="stat-label">基本配課指標</span>
+                <i data-lucide="alert-triangle" class="stat-icon text-warning"></i>
+              </div>
+              <div class="stat-value" id="stat-teacher-status">0 位異常</div>
+              <div class="stat-desc" id="stat-teacher-detail">未達標: 0 | 超載: 0 (除鐘點外)</div>
+            </div>
+          </div>
+
+          <div class="grid grid-2-1 mt-6">
+            <!-- Left: Quick Info & Summary -->
+            <div class="panel glass">
+              <div class="panel-header">
+                <h3><i data-lucide="info" class="panel-icon"></i> 系統基本規格矩陣</h3>
+              </div>
+              <div class="panel-body">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>年級組別</th>
+                      <th>班級數</th>
+                      <th>每班每週節數</th>
+                      <th>小計節數</th>
+                      <th>時段分配限制</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>低年級 (1-2年級)</td>
+                      <td>4 班 (101, 102, 201, 202)</td>
+                      <td>23 節</td>
+                      <td>92 節</td>
+                      <td>僅週二上全天 (第 5-7 節可排)；其餘四天半天</td>
+                    </tr>
+                    <tr>
+                      <td>中年級 (3-4年級)</td>
+                      <td>5 班 (301, 302, 401, 402, 403)</td>
+                      <td>29 節</td>
+                      <td>145 節</td>
+                      <td>週三、週五上半天；週一、二、四全天</td>
+                    </tr>
+                    <tr>
+                      <td>高年級 (5-6年級)</td>
+                      <td>6 班 (501~503, 601~603)</td>
+                      <td>32 節</td>
+                      <td>192 節</td>
+                      <td>僅週三上半天；其餘四天全天 (共 32 節)</td>
+                    </tr>
+                    <tr class="table-total">
+                      <td>全校總計</td>
+                      <td>15 班</td>
+                      <td>—</td>
+                      <td><strong>429 節</strong></td>
+                      <td>全校每週排課總額限制</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Right: Staff status list -->
+            <div class="panel glass">
+              <div class="panel-header">
+                <h3><i data-lucide="shield-alert" class="panel-icon"></i> 教師授課負擔統計</h3>
+              </div>
+              <div class="panel-body flex-column">
+                <div class="staff-summary-stats mb-4">
+                  <div class="badge badge-success">編制基本數: 395 節</div>
+                  <div class="badge badge-primary">鐘點教師補足: 34 節</div>
+                </div>
+                <div class="teacher-load-list-compact" id="dashboard-teacher-loads">
+                  <!-- Generated by JS -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tab 2: Settings -->
+        <section id="tab-settings" class="tab-pane">
+          <div class="tabs-sub">
+            <button class="tab-sub-btn active" data-sub-tab="teachers">教師清單管理</button>
+            <button class="tab-sub-btn" data-sub-tab="classes">班級與專科教室</button>
+          </div>
+
+          <!-- Sub-Tab: Teachers -->
+          <div id="sub-tab-teachers" class="sub-tab-pane active">
+            <div class="action-bar mb-4">
+              <div class="search-box">
+                <i data-lucide="search"></i>
+                <input type="text" id="search-teacher" placeholder="搜尋教師姓名或職務...">
+              </div>
+              <div class="button-group">
+                <button id="btn-add-teacher" class="btn btn-primary btn-icon-text">
+                  <i data-lucide="user-plus"></i>
+                  <span>手動新增教師</span>
+                </button>
+                <button id="btn-import-csv" class="btn btn-secondary btn-icon-text">
+                  <i data-lucide="file-spreadsheet"></i>
+                  <span>CSV 批次匯入</span>
+                </button>
+                <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+              </div>
+            </div>
+
+            <!-- Drag & Drop Zone for CSV -->
+            <div id="csv-drop-zone" class="drop-zone mb-4">
+              <i data-lucide="file-up" class="drop-icon"></i>
+              <p>拖曳教師名單 CSV 檔案至此，或 <strong>點此選擇檔案</strong></p>
+              <span>支援欄位格式：教師編號, 姓名, 身分職務, 基本節數, 帶班班級, 專長科目</span>
+              <a href="#" id="download-csv-template" class="mt-2 text-link">下載範本格式 CSV</a>
+            </div>
+
+            <div class="panel glass">
+              <div class="panel-body p-0">
+                <table class="table" id="table-teachers">
+                  <thead>
+                    <tr>
+                      <th>教師編號</th>
+                      <th>姓名</th>
+                      <th>身分職務</th>
+                      <th>基本節數</th>
+                      <th>帶班班級</th>
+                      <th>專長科目</th>
+                      <th>不可排課時段 (會議/偏好)</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="teacher-list-tbody">
+                    <!-- Dynamic -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sub-Tab: Classes -->
+          <div id="sub-tab-classes" class="sub-tab-pane">
+            <div class="grid grid-2">
+              <div class="panel glass">
+                <div class="panel-header">
+                  <h3><i data-lucide="home" class="panel-icon"></i> 全校 15 班級列表</h3>
+                </div>
+                <div class="panel-body">
+                  <div class="class-grid" id="class-cards-container">
+                    <!-- Dynamic -->
+                  </div>
+                </div>
+              </div>
+
+              <div class="panel glass">
+                <div class="panel-header">
+                  <h3><i data-lucide="map-pin" class="panel-icon"></i> 專科教室與容納上限</h3>
+                </div>
+                <div class="panel-body">
+                  <p class="text-secondary mb-4">設定各專科教室在同一時段能容納的最大班級數，排課引擎會自動進行衝突檢查避免超載。</p>
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th>教室類型</th>
+                        <th>代表科目</th>
+                        <th>同時段上限 (班級數)</th>
+                        <th>說明</th>
+                      </tr>
+                    </thead>
+                    <tbody id="room-list-tbody">
+                      <!-- Dynamic -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tab 3: Assignments -->
+        <section id="tab-assignments" class="tab-pane">
+          <div class="action-bar mb-4 glass p-4 rounded-xl flex-justify-between">
+            <div class="assign-summary-info">
+              <span class="text-secondary">配課進度：</span>
+              <strong id="assign-progress-text" class="text-primary font-bold">0 / 429 節 (0%)</strong>
+              <div class="progress-bar-container inline-progress ml-3" style="width: 150px; display: inline-block; vertical-align: middle;">
+                <div class="progress-bar" id="bar-assign-progress-tab" style="width: 0%"></div>
+              </div>
+            </div>
+            <div class="button-group">
+              <button id="btn-auto-assign-homeroom" class="btn btn-secondary btn-icon-text">
+                <i data-lucide="user-check"></i>
+                <span>導師主科一鍵綁定</span>
+              </button>
+              <button id="btn-auto-assign-subjects" class="btn btn-secondary btn-icon-text">
+                <i data-lucide="sparkles"></i>
+                <span>科任專長自動匹配</span>
+              </button>
+              <button id="btn-clear-assignments" class="btn btn-danger-outline btn-icon-text">
+                <i data-lucide="trash-2"></i>
+                <span>清空配課資料</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-3-1">
+            <!-- Left: Class Assignment Editor -->
+            <div class="panel glass">
+              <div class="panel-header flex-justify-between">
+                <h3><i data-lucide="book-open" class="panel-icon"></i> 班級配課矩陣</h3>
+                <select id="select-assign-class" class="select-field">
+                  <!-- Generated by JS: 15 classes -->
+                </select>
+              </div>
+              <div class="panel-body">
+                <div id="class-assigned-total-badge" class="mb-4 text-secondary">
+                  該班配課總數: <strong id="class-assigned-hours" class="text-light">0</strong> / <span id="class-target-hours">0</span> 節
+                </div>
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>科目名稱</th>
+                      <th>每週節數</th>
+                      <th>特殊教室</th>
+                      <th>指定授課教師</th>
+                      <th>教師身分</th>
+                      <th>專長比對</th>
+                    </tr>
+                  </thead>
+                  <tbody id="class-subjects-assign-tbody">
+                    <!-- Generated Dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Right: Teacher Load Checker -->
+            <div class="panel glass">
+              <div class="panel-header">
+                <h3><i data-lucide="user-check" class="panel-icon"></i> 教師即時負擔 (已配/基本)</h3>
+              </div>
+              <div class="panel-body p-0">
+                <div class="load-legend p-3 flex">
+                  <div class="legend-item"><span class="legend-color bg-warning"></span>未達</div>
+                  <div class="legend-item"><span class="legend-color bg-success"></span>剛好</div>
+                  <div class="legend-item"><span class="legend-color bg-primary"></span>超節</div>
+                </div>
+                <div class="teacher-load-list-full" id="teacher-load-list-container">
+                  <!-- Dynamic -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tab 4: Engine -->
+        <section id="tab-engine" class="tab-pane">
+          <div class="grid grid-2">
+            <!-- Engine Panel -->
+            <div class="panel glass flex-column flex-justify-between">
+              <div>
+                <div class="panel-header">
+                  <h3><i data-lucide="cog" class="panel-icon"></i> 排課引擎引導與參數設定</h3>
+                </div>
+                <div class="panel-body">
+                  <p class="text-secondary mb-4">系統將使用啟發式優先度＋回溯演算法進行自動排課，需先滿足 100% 配課（429 節都分配好教師）。</p>
+                  
+                  <div class="form-group mb-4">
+                    <label class="form-label">最大回溯次數限制 (Max Backtracks)</label>
+                    <input type="number" id="engine-max-backtracks" class="input-field" value="50000" min="1000" max="500000">
+                    <span class="form-help">過高的限制可能導致瀏覽器在無解時短暫失去響應，預設 50,000 次已能解決大多數常規衝突。</span>
+                  </div>
+
+                  <div class="form-group mb-4">
+                    <label class="checkbox-container">
+                      <input type="checkbox" id="engine-prefer-morning-core" checked>
+                      <span class="checkmark"></span>
+                      優化：國語、數學等每週 >3 節主科，優先安排在上午 (1~3 節)
+                    </label>
+                  </div>
+
+                  <div class="form-group mb-4">
+                    <label class="checkbox-container">
+                      <input type="checkbox" id="engine-prefer-consecutive-special" checked>
+                      <span class="checkmark"></span>
+                      優化：藝術、自然與電腦等專科課程優先排為連堂 (2 節相連)
+                    </label>
+                  </div>
+
+                  <div class="engine-readiness-check mb-4 p-4 rounded-lg bg-dark-card border">
+                    <h4>排課前置檢查：</h4>
+                    <ul class="check-list mt-2">
+                      <li id="check-step-total-hours"><i data-lucide="circle-dashed" class="icon-small"></i> 全校配課已達 429 節 (目前: <span id="check-current-assigned">0</span> 節)</li>
+                      <li id="check-step-teacher-errors"><i data-lucide="circle-dashed" class="icon-small"></i> 教師配課負荷無嚴重超載 (未強制限制，但會警告)</li>
+                      <li id="check-step-busy-slots"><i data-lucide="circle-dashed" class="icon-small"></i> 教師不可排課時段無邏輯衝突 (例如導師開會時段不可排其導師課)</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div class="p-6 border-top">
+                <button id="btn-start-scheduling" class="btn btn-primary btn-large btn-full btn-icon-text">
+                  <i data-lucide="play-circle"></i>
+                  <span>啟動智慧自動排課</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Output console -->
+            <div class="panel glass flex-column">
+              <div class="panel-header flex-justify-between">
+                <h3><i data-lucide="terminal" class="panel-icon"></i> 引擎運算控制台</h3>
+                <button id="btn-clear-console" class="btn btn-icon btn-secondary-outline" title="清除日誌">
+                  <i data-lucide="trash-2" class="icon-small"></i>
+                </button>
+              </div>
+              <div class="panel-body flex-1 bg-console p-4 font-mono rounded-b-xl overflow-y" id="engine-console-output">
+                [Ready] 系統排課引擎已就緒，等待指令...
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tab 5: Viewer -->
+        <section id="tab-viewer" class="tab-pane">
+          <div class="action-bar mb-4 glass p-4 rounded-xl flex-justify-between flex-wrap gap-4">
+            <div class="flex items-center gap-3">
+              <div class="form-group-inline">
+                <label class="form-label-inline">檢視維度：</label>
+                <select id="viewer-dimension" class="select-field">
+                  <option value="class">以「班級」為中心</option>
+                  <option value="teacher">以「教師」為中心</option>
+                  <option value="room">以「專科教室」為中心</option>
+                </select>
+              </div>
+              <div class="form-group-inline">
+                <label class="form-label-inline" id="label-viewer-target">選擇班級：</label>
+                <select id="viewer-target-select" class="select-field">
+                  <!-- Dynamic -->
+                </select>
+              </div>
+            </div>
+
+            <div class="button-group">
+              <button id="btn-export-excel" class="btn btn-secondary btn-icon-text">
+                <i data-lucide="file-spreadsheet"></i>
+                <span>匯出全校課表 (Excel)</span>
+              </button>
+              <button id="btn-print-timetable" class="btn btn-secondary btn-icon-text">
+                <i data-lucide="printer"></i>
+                <span>列印當前課表</span>
+              </button>
+            </div>
+          </div>
+
+          <div id="timetable-alert-box" class="alert alert-info mb-4" style="display: none;">
+            <i data-lucide="info" class="alert-icon"></i>
+            <span id="timetable-alert-message">手動調整模式：點擊並拖曳課程方塊以調課。系統會自動驗證衝突。</span>
+          </div>
+
+          <div class="panel glass">
+            <div class="panel-body p-4 overflow-x">
+              <div class="timetable-wrapper">
+                <table class="table timetable-table" id="timetable-grid-table">
+                  <thead>
+                    <tr>
+                      <th class="time-col">節次 / 時間</th>
+                      <th>星期一 (Mon)</th>
+                      <th>星期二 (Tue)</th>
+                      <th>星期三 (Wed)</th>
+                      <th>星期四 (Thu)</th>
+                      <th>星期五 (Fri)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="timetable-tbody">
+                    <!-- Generated Dynamically by JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Modals -->
+  <!-- 1. Teacher Edit Modal -->
+  <div class="modal" id="modal-teacher">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <h3 id="modal-teacher-title">手動新增教師</h3>
+        <button class="btn-close-modal"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <form id="form-teacher">
+          <input type="hidden" id="teacher-form-action" value="create">
+          
+          <div class="form-group mb-4">
+            <label class="form-label" for="teacher-id">教師編號 (如 T001, T002)</label>
+            <input type="text" id="teacher-id" class="input-field" required placeholder="T001">
+          </div>
+
+          <div class="form-group mb-4">
+            <label class="form-label" for="teacher-name">姓名</label>
+            <input type="text" id="teacher-name" class="input-field" required placeholder="張小明">
+          </div>
+
+          <div class="form-group mb-4">
+            <label class="form-label" for="teacher-role">身分職務</label>
+            <select id="teacher-role" class="select-field">
+              <option value="director">主任 (預設 3 節)</option>
+              <option value="leader">組長 (預設 9 節)</option>
+              <option value="homeroom">導師 (預設 16 節)</option>
+              <option value="subject">科任 (預設 20 節)</option>
+              <option value="hourly">鐘點 (預設 0 節)</option>
+            </select>
+          </div>
+
+          <div class="form-group mb-4">
+            <label class="form-label" for="teacher-base-hours">自訂基本授課節數 (留空則依身分預設)</label>
+            <input type="number" id="teacher-base-hours" class="input-field" placeholder="自動帶入" min="0" max="40">
+          </div>
+
+          <div class="form-group mb-4" id="form-group-homeroom-class" style="display: none;">
+            <label class="form-label" for="teacher-homeroom-class">所帶班級 (僅導師需要)</label>
+            <select id="teacher-homeroom-class" class="select-field">
+              <option value="">-- 無 --</option>
+              <!-- 15 classes -->
+            </select>
+          </div>
+
+          <div class="form-group mb-4">
+            <label class="form-label" for="teacher-specialties">專長科目 (多個以分號 ; 隔開，如 國語;數學)</label>
+            <input type="text" id="teacher-specialties" class="input-field" placeholder="自然;美勞;電腦">
+          </div>
+
+          <div class="form-group mb-4">
+            <label class="form-label">不可排課時段 (點選設定，紅色表示不排課)</label>
+            <div class="busy-slots-selector" id="busy-slots-grid">
+              <!-- Rendered as a mini calendar: Mon-Fri, 1-7 periods -->
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-close-modal">取消</button>
+        <button type="submit" form="form-teacher" class="btn btn-primary">儲存教師</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Manual Assignment Dialog (Optional or handled inline) -->
+  <div class="modal" id="modal-import-confirm">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <h3>確認 CSV 匯入名單</h3>
+        <button class="btn-close-modal"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-4">系統即將匯入以下教師資料，這將覆蓋現有相同編號的教師：</p>
+        <div class="table-preview-wrapper max-h-60 overflow-y">
+          <table class="table table-preview">
+            <thead>
+              <tr>
+                <th>編號</th>
+                <th>姓名</th>
+                <th>職務</th>
+                <th>基本節數</th>
+                <th>帶班</th>
+                <th>專長</th>
+              </tr>
+            </thead>
+            <tbody id="csv-preview-tbody">
+              <!-- Generated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-close-modal">取消</button>
+        <button id="btn-csv-confirm-save" class="btn btn-primary">確認匯入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script type="module" src="data.js"></script>
+  <script type="module" src="scheduler.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

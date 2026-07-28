@@ -1,0 +1,51 @@
+## [2026-07-28 17:15:00] - 修正線上配課匹配進度與清空邏輯
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 修正「科任專長自動匹配」進度停留在 65% 的問題，並修正「清空配課資料」重設後無法重新完全匹配的瑕疵。
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在 `data.js` 的 `getInitialState()` 中，將全校 15 個班級的所有科目配課物件在系統初始化時即行建立（預設 `teacherId` 為空字串），避免因懶載入導致部分科目未在 `state.assignments` 中而無法被自動配課匹配。
+    *   在 `app.js` 的「清空配課資料」按鈕事件中，將配課陣列之 `teacherId` 設為空字串，而非直接將整個陣列設為空，保留配課架構供重新匹配。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `data.js`: 於 `getInitialState()` 中完整初始化全校所有班級的課務配課項目。
+    *   `[MODIFIED]` `app.js`: 調整清空配課資料按鈕邏輯，僅清空教師指派關係。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 17:05:00] - [Self-Correction / Bugfix] 自我修正/錯誤修復
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > [Self-Correction / Bugfix] 修正 scheduler.js 語法錯誤
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   修正 `scheduler.js` 中 for 迴圈結束處的語法標點符號，將錯誤的 `});` 改為 `}`。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `scheduler.js`: 修正 for 迴圈結尾之 SyntaxError。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-07-28 17:00:42] - 系統初始化與開發啟動
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 開始分析並且思考如何開發。使用者已核准實作計畫。
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   建立專案的目錄架構，包含：
+        *   `dev_history.log`：專案開發歷程日誌。
+        *   `index.html`：單頁 Web App 入口與骨架。
+        *   `style.css`：質感暗色與亮色模式 CSS 設計系統。
+        *   `data.js`：資料結構、測試資料、CSV 解析與 LocalStorage 持久化。
+        *   `scheduler.js`：啟發式優先度 + 回溯法排課引擎。
+        *   `app.js`：拖拉調課、自動配課、Excel 匯出及 UI 事件主控器。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[CREATED]` `dev_history.log`: 初始化開發歷程日誌檔。
+    *   `[CREATED]` `index.html`: 新增排課系統的主網頁結構。
+    *   `[CREATED]` `style.css`: 新增設計系統與切換模式樣式。
+    *   `[CREATED]` `data.js`: 新增預設資料模型與驗證邏輯。
+    *   `[CREATED]` `scheduler.js`: 新增自動排課的核心演算法。
+    *   `[CREATED]` `app.js`: 新增 UI 控制與互動邏輯。
+
+*   **目前狀態 (Current Status):** 進行中 In Progress
