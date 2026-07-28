@@ -62,7 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
       dirty = true;
     }
     if (!state.rooms || typeof state.rooms !== 'object' || Array.isArray(state.rooms)) {
-      state.rooms = { ...DEFAULT_ROOMS };
+      state.rooms = {};
       dirty = true;
     }
     if (dirty) {
@@ -591,15 +591,36 @@ function renderClassesAndRooms() {
     }
   }
 
-  // Render Rooms limit list
+export function ensureRoomExists(roomKey) {
+  if (!roomKey || typeof roomKey !== 'string') return null;
+  const key = roomKey.trim();
+  if (!key || ["無", "不需要", "null", "無須", "-", "none"].includes(key.toLowerCase())) return null;
+
+  if (!state.rooms) state.rooms = {};
+  
+  if (!state.rooms[key]) {
+    let displayName = key;
+    if (!displayName.endsWith("教室") && !displayName.endsWith("館") && !displayName.endsWith("場") && !displayName.endsWith("室") && !displayName.endsWith("中心")) {
+      displayName = key + "教室";
+    }
+    state.rooms[key] = {
+      name: displayName,
+      limit: 1
+    };
+    showConsoleLog(`自動依據科目資料建立專科教室【${displayName}】(代碼: ${key}，同時段上限: 1 班)`);
+  }
+  return key;
+}
+
+// Render Rooms limit list
   const roomTbody = document.getElementById("room-list-tbody");
   if (roomTbody) {
     roomTbody.innerHTML = "";
-    const rooms = state.rooms || DEFAULT_ROOMS;
+    const rooms = state.rooms || {};
     const keys = Object.keys(rooms);
 
     if (keys.length === 0) {
-      roomTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 1.5rem;">目前尚無專科教室，點擊右上方「新增專科教室」建立。</td></tr>`;
+      roomTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 1.5rem;">目前尚無專科教室。將於匯入科目 CSV 時自動由「特殊教室」欄位擷取建立，或可點擊右上方「新增專科教室」手動新增。</td></tr>`;
     } else {
       keys.forEach(key => {
         const room = rooms[key];
@@ -2324,7 +2345,8 @@ function handleSubjectFormSubmit(e) {
   const grade = parseInt(document.getElementById("subject-grade").value);
   const name = document.getElementById("subject-name").value.trim();
   const hours = parseInt(document.getElementById("subject-hours").value);
-  const room = document.getElementById("subject-room").value || null;
+  const rawRoom = document.getElementById("subject-room").value || null;
+  const room = rawRoom ? ensureRoomExists(rawRoom) : null;
 
   if (!name || isNaN(grade) || isNaN(hours)) return;
 
@@ -2368,6 +2390,7 @@ function handleSubjectFormSubmit(e) {
   saveAppState(state);
   closeAllModals();
   renderSubjects();
+  renderClassesAndRooms();
   showConsoleLog(`手動儲存科目: ${grade}年級 ${name} (${hours} 節)`);
 }
 
@@ -2420,6 +2443,10 @@ function showSubjectCSVPreviewModal() {
   const confirmBtn = document.getElementById("btn-subject-csv-confirm-save");
   confirmBtn.onclick = function() {
     tempImportSubjects.forEach(newS => {
+      if (newS.requiresRoom) {
+        newS.requiresRoom = ensureRoomExists(newS.requiresRoom);
+      }
+
       const idx = state.subjects.findIndex(s => s.id === newS.id);
       if (idx !== -1) {
         state.subjects[idx] = newS;
@@ -2451,7 +2478,8 @@ function showSubjectCSVPreviewModal() {
     saveAppState(state);
     closeAllModals();
     renderSubjects();
-    showConsoleLog(`成功批次匯入 ${tempImportSubjects.length} 個科目設定，課表已重置。`);
+    renderClassesAndRooms();
+    showConsoleLog(`成功批次匯入 ${tempImportSubjects.length} 個科目設定，專科教室已根據「特殊教室」自動建立，課表已重置。`);
   };
 }
 
