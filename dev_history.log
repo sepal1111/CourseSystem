@@ -1,3 +1,23 @@
+## [2026-08-12 13:26:00] - [Self-Correction / Bugfix] 修復 Git 同步拒絕 (GitHub 巨型檔案限制問題)
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 我一直同步錯誤
+
+*   **問題分析與診斷 (Root Cause Analysis):**
+    *   之前的 Git 提交紀錄中包含了未忽略的 `dist/win-unpacked/國小智慧自動排課系統.exe` (181.73 MB) 巨型執行檔。
+    *   GitHub 設有單一檔案 **100 MB 嚴格傳輸限制**，導致執行 `git push` 時被遠端 Hook 退回 (pre-receive hook declined)。
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   修復 `.gitignore` 檔案，確定加入 `dist` 與 `node_modules` 忽略清單。
+    *   執行 `git reset --soft` 重設近幾次 Commit 歷史，並以 `git reset HEAD dist` 將巨型 `dist/` 二進位打包檔自版本控制中排除。
+    *   重新進行乾淨 Commit 並成功同步推送到 GitHub 遠端倉庫。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `.gitignore`: 加入 `dist` 忽略規則。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次 Bugfix 歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
 ## [2026-08-12 12:13:00] - 打包流程加入自動流水號遞增 (predist version bump) 機制
 
 *   **使用者提示詞 / 需求 (User Prompt):**
