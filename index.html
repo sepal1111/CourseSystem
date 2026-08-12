@@ -12,8 +12,8 @@
   <link rel="stylesheet" href="style.css">
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- SheetJS for Excel export -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- SheetJS for Excel import and export -->
+  <script src="vendor/xlsx.full.min.js"></script>
 </head>
 <body>
   <div class="app-container">
@@ -211,16 +211,16 @@
                 </button>
                 <button id="btn-import-csv" class="btn btn-secondary btn-icon-text">
                   <i data-lucide="file-spreadsheet"></i>
-                  <span>CSV 批次匯入</span>
+                  <span>Excel / CSV 批次匯入</span>
                 </button>
-                <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+                <input type="file" id="csv-file-input" accept=".csv, .xlsx, .xls" style="display: none;">
               </div>
             </div>
 
-            <!-- Drag & Drop Zone for CSV -->
+            <!-- Drag & Drop Zone for CSV / Excel -->
             <div id="csv-drop-zone" class="drop-zone mb-4">
               <i data-lucide="file-up" class="drop-icon"></i>
-              <p>拖曳教師名單 CSV 檔案至此，或 <strong>點此選擇檔案</strong></p>
+              <p>拖曳教師名單 Excel / CSV 檔案至此，或 <strong>點此選擇檔案</strong></p>
               <span>支援欄位格式：教師編號, 姓名, 身分職務, 基本節數, 帶班班級, 專長科目</span>
             </div>
 
@@ -288,9 +288,9 @@
                     </button>
                     <button id="btn-import-class" class="btn btn-secondary btn-icon-text" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
                       <i data-lucide="file-spreadsheet" style="width: 14px; height: 14px;"></i>
-                      <span>匯入班級 CSV</span>
+                      <span>匯入班級 Excel / CSV</span>
                     </button>
-                    <input type="file" id="class-csv-file-input" accept=".csv" style="display: none;">
+                    <input type="file" id="class-csv-file-input" accept=".csv, .xlsx, .xls" style="display: none;">
                   </div>
                 </div>
                 <div class="panel-body">
@@ -343,9 +343,9 @@
                 </button>
                 <button id="btn-import-subject-csv" class="btn btn-secondary btn-icon-text">
                   <i data-lucide="file-spreadsheet"></i>
-                  <span>匯入科目 CSV</span>
+                  <span>匯入科目 Excel / CSV</span>
                 </button>
-                <input type="file" id="subject-csv-file-input" accept=".csv" style="display: none;">
+                <input type="file" id="subject-csv-file-input" accept=".csv, .xlsx, .xls" style="display: none;">
               </div>
             </div>
 
@@ -775,7 +775,7 @@
   <div class="modal" id="modal-import-confirm">
     <div class="modal-content glass">
       <div class="modal-header">
-        <h3>確認 CSV 匯入名單</h3>
+        <h3>確認 Excel / CSV 匯入名單</h3>
         <button class="btn-close-modal"><i data-lucide="x"></i></button>
       </div>
       <div class="modal-body">
@@ -809,7 +809,7 @@
   <div class="modal" id="modal-class-import-confirm">
     <div class="modal-content glass">
       <div class="modal-header">
-        <h3>確認 CSV 匯入班級</h3>
+        <h3>確認 Excel / CSV 匯入班級</h3>
         <button class="btn-close-modal"><i data-lucide="x"></i></button>
       </div>
       <div class="modal-body">
@@ -930,7 +930,7 @@
   <div class="modal" id="modal-subject-import-confirm">
     <div class="modal-content glass">
       <div class="modal-header">
-        <h3>確認 CSV 匯入科目</h3>
+        <h3>確認 Excel / CSV 匯入科目</h3>
         <button class="btn-close-modal"><i data-lucide="x"></i></button>
       </div>
       <div class="modal-body">

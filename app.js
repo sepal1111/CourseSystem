@@ -217,10 +217,10 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     csvDropZone.classList.remove("dragover");
     const file = e.dataTransfer.files[0];
-    if (file && file.name.endsWith(".csv")) {
+    if (file && (file.name.endsWith(".csv") || file.name.endsWith(".xlsx") || file.name.endsWith(".xls"))) {
       processCSVFile(file);
     } else {
-      alert("請上傳正確的 .csv 檔案格式");
+      alert("請上傳正確的 .csv, .xlsx 或 .xls 檔案格式");
     }
   });
 
@@ -1043,23 +1043,58 @@ function handleClassCSVSelect(e) {
   }
 }
 
-function processClassCSVFile(file) {
+// Helper: Reads CSV or Excel (.xlsx, .xls) file and converts to CSV string
+function readFileAsCSVText(file, callback) {
+  const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
   const reader = new FileReader();
   reader.onload = function(evt) {
-    const text = evt.target.result;
+    try {
+      let text = "";
+      if (isExcel) {
+        if (typeof XLSX === "undefined") {
+          alert("SheetJS (XLSX) 解析模組未載入");
+          return;
+        }
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        text = XLSX.utils.sheet_to_csv(worksheet);
+      } else {
+        text = evt.target.result;
+      }
+      callback(null, text);
+    } catch (err) {
+      callback(err, null);
+    }
+  };
+
+  if (isExcel) {
+    reader.readAsArrayBuffer(file);
+  } else {
+    reader.readAsText(file, "UTF-8");
+  }
+}
+
+function processClassCSVFile(file) {
+  readFileAsCSVText(file, (err, text) => {
+    if (err) {
+      alert("讀取檔案出錯，請確認檔案格式是否正確。");
+      console.error(err);
+      return;
+    }
     try {
       tempImportClasses = parseClassCSV(text);
       if (tempImportClasses.length === 0) {
-        alert("無法從 CSV 檔案解析出有效的班級名單。請檢查格式是否符合。");
+        alert("無法從檔案解析出有效的班級名單。請檢查格式是否符合。");
         return;
       }
       showClassCSVPreviewModal();
     } catch (err) {
-      alert("讀取 CSV 檔案出錯，請確認編碼為 UTF-8 或格式正確。");
+      alert("解析檔案內容出錯，請確認格式正確。");
       console.error(err);
     }
-  };
-  reader.readAsText(file, "UTF-8");
+  });
 }
 
 function showClassCSVPreviewModal() {
@@ -1116,22 +1151,24 @@ function showClassCSVPreviewModal() {
 }
 
 function processCSVFile(file) {
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const text = e.target.result;
+  readFileAsCSVText(file, (err, text) => {
+    if (err) {
+      alert("讀取檔案出錯，請確認檔案格式是否正確。");
+      console.error(err);
+      return;
+    }
     try {
       tempImportTeachers = parseTeacherCSV(text);
       if (tempImportTeachers.length === 0) {
-        alert("無法從 CSV 檔案解析出有效的教師名單。請檢查格式是否符合。");
+        alert("無法從檔案解析出有效的教師名單。請檢查格式是否符合。");
         return;
       }
       showCSVPreviewModal();
     } catch (err) {
-      alert("讀取 CSV 檔案出錯，請確認編碼為 UTF-8 或格式正確。");
+      alert("解析檔案內容出錯，請確認格式正確。");
       console.error(err);
     }
-  };
-  reader.readAsText(file, "UTF-8");
+  });
 }
 
 function showCSVPreviewModal() {
@@ -2910,22 +2947,24 @@ function handleSubjectCSVSelect(e) {
 }
 
 function processSubjectCSVFile(file) {
-  const reader = new FileReader();
-  reader.onload = function(evt) {
-    const text = evt.target.result;
+  readFileAsCSVText(file, (err, text) => {
+    if (err) {
+      alert("讀取檔案出錯，請確認檔案格式是否正確。");
+      console.error(err);
+      return;
+    }
     try {
       tempImportSubjects = parseSubjectCSV(text);
       if (tempImportSubjects.length === 0) {
-        alert("無法從 CSV 檔案解析出有效的科目設定。請檢查格式是否符合。");
+        alert("無法從檔案解析出有效的科目設定。請檢查格式是否符合。");
         return;
       }
       showSubjectCSVPreviewModal();
     } catch (err) {
-      alert("讀取 CSV 檔案出錯，請確認編碼為 UTF-8 或格式正確。");
+      alert("解析檔案內容出錯，請確認格式正確。");
       console.error(err);
     }
-  };
-  reader.readAsText(file, "UTF-8");
+  });
 }
 
 function showSubjectCSVPreviewModal() {

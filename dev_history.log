@@ -1,3 +1,55 @@
+## [2026-08-12 12:13:00] - 打包流程加入自動流水號遞增 (predist version bump) 機制
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 每次封裝都要增加流水號
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在 `package.json` 的 `scripts` 區塊加入 `"predist": "npm version patch --no-git-tag-version"` 前置建置鉤子。
+    *   每次執行 `npm run dist` 進行可攜式執行檔封裝時，系統自動將 `package.json` 中的 `version` 版本流水號 +1（如 `1.0.0` ➔ `1.0.1`）。
+    *   `electron-builder` 的 `artifactName` 會自動以最新版本號命名產出檔（例如 `國小智慧自動排課系統-1.0.1.exe`）。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `package.json`: 新增 predist 流水號遞增腳本。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 11:55:00] - 匯入功能全面新增原生 Excel 試算表 (.xlsx, .xls) 格式支援
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 匯入的檔案格式增加支援excel檔案
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在教師名單、班級名單與科目架構匯入模組中導入 SheetJS (`XLSX`) 離線解析器。
+    *   擴充檔案選擇器 `<input accept>` 與拖曳區域 (`#csv-drop-zone`) 之檔案過濾判斷，支援 `.csv`, `.xlsx`, `.xls`。
+    *   新增 `readAsArrayBuffer` + `XLSX.read` 雙軌讀取機制，將 Excel 工作表轉換為 CSV 資料串流後傳入 parser 進行無縫預覽與儲存。
+    *   下載離線版 `vendor/xlsx.full.min.js` 資源，確保 Electron 可攜式 `.exe` 執行檔完全離線可用。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[CREATED]` `vendor/xlsx.full.min.js`: 離線版本 SheetJS 腳本庫。
+    *   `[MODIFIED]` `index.html`: 更新 accept 屬性、載入離線 script 並升級匯入 UI 文字。
+    *   `[MODIFIED]` `app.js`: 實現 Excel/CSV 雙軌解析與拖曳相容處理。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次變更歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 11:47:00] - 規劃並實作 Electron 可攜式單一執行檔 (.exe) 封裝機制
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 封裝成一個可攜式執行檔
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   採用 **Electron + electron-builder (Portable Target)** 方案將靜態 Web 應用程式封裝為單一免安裝可攜式 Windows 執行檔 (`.exe`)。
+    *   撰寫 `main.js` 實現原生桌面視窗載入 `index.html`，並建立 `package.json` 配置打包腳本與環境依賴。
+    *   建置 `dist/` 輸出目錄，確保使用者雙擊即可於任何 Windows 電腦執行全功能排課系統。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[CREATED]` `package.json`: npm 專案設定與 electron-builder 打包配置。
+    *   `[CREATED]` `main.js`: Electron 主處理程序視窗創建邏輯。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次打包歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
 ## [2026-07-28 23:58:00] - 實體不可能排課條件前置診斷與對稱破壞 (Symmetry Breaking) 演算法大幅修復
 
 *   **使用者提示詞 / 需求 (User Prompt):**

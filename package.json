@@ -1,0 +1,39 @@
+{
+  "name": "course-system",
+  "version": "1.0.1",
+  "description": "國小智慧自動排課系統 Desktop App",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "predist": "npm version patch --no-git-tag-version",
+    "dist": "electron-builder --win portable"
+  },
+  "keywords": [
+    "course",
+    "scheduler",
+    "school"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.coursesystem.app",
+    "productName": "國小智慧自動排課系統",
+    "win": {
+      "target": [
+        "portable"
+      ]
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}.${ext}"
+    },
+    "files": [
+      "**/*",
+      "!dist/**/*",
+      "!.git/**/*"
+    ]
+  }
+}
