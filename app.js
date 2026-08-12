@@ -258,13 +258,39 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-assign-mode-teacher").addEventListener("click", () => setAssignMode("teacher"));
   const btnUnassigned = document.getElementById("btn-assign-mode-unassigned");
   if (btnUnassigned) btnUnassigned.addEventListener("click", () => setAssignMode("unassigned"));
+  const btnOverview = document.getElementById("btn-assign-mode-teacher-overview");
+  if (btnOverview) btnOverview.addEventListener("click", () => setAssignMode("teacher-overview"));
 
   const gradeFilter = document.getElementById("select-unassigned-grade-filter");
   if (gradeFilter) gradeFilter.addEventListener("change", () => renderUnassignedAssignments());
 
   const searchInput = document.getElementById("input-unassigned-search");
   if (searchInput) searchInput.addEventListener("input", () => renderUnassignedAssignments());
+
+  // Overview Filters Handlers
+  const roleOverviewFilter = document.getElementById("select-overview-role-filter");
+  if (roleOverviewFilter) roleOverviewFilter.addEventListener("change", () => renderTeacherOverviewAssignments());
+
+  const statusOverviewFilter = document.getElementById("select-overview-status-filter");
+  if (statusOverviewFilter) statusOverviewFilter.addEventListener("change", () => renderTeacherOverviewAssignments());
+
+  const searchOverviewInput = document.getElementById("input-overview-search");
+  if (searchOverviewInput) searchOverviewInput.addEventListener("input", () => renderTeacherOverviewAssignments());
+
+  const btnExportOverviewExcel = document.getElementById("btn-export-teacher-overview-excel");
+  if (btnExportOverviewExcel) btnExportOverviewExcel.addEventListener("click", () => exportTeacherOverviewExcel());
+
+  const btnCopyAllSummary = document.getElementById("btn-copy-all-teacher-summary");
+  if (btnCopyAllSummary) btnCopyAllSummary.addEventListener("click", () => copyAllTeacherSummaries());
   
+  // Grade-wide lock tool (e.g. 本土語言拆班 - lock same subject to one slot across a whole grade)
+  const gradeLockGrade = document.getElementById("grade-lock-grade");
+  if (gradeLockGrade) gradeLockGrade.addEventListener("change", () => populateGradeLockSubjects());
+  const btnApplyGradeLock = document.getElementById("btn-apply-grade-lock");
+  if (btnApplyGradeLock) btnApplyGradeLock.addEventListener("click", () => applyGradeLock());
+  const btnClearGradeLock = document.getElementById("btn-clear-grade-lock");
+  if (btnClearGradeLock) btnClearGradeLock.addEventListener("click", () => clearGradeLock());
+
   document.getElementById("select-assign-teacher").addEventListener("change", () => renderTeacherBatchAssignments());
   document.getElementById("select-assign-teacher-subject").addEventListener("change", () => renderTeacherBatchAssignments());
   document.getElementById("btn-batch-select-all").addEventListener("click", () => batchAssignSelectAll(true));
@@ -274,7 +300,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-auto-assign-subjects").addEventListener("click", autoAssignSubjectTeachers);
   document.getElementById("btn-clear-assignments").addEventListener("click", () => {
     if (confirm("確定要清空所有班級配課資料嗎？這將同時重置排課表！")) {
-      state.assignments.forEach(a => a.teacherId = "");
+      state.assignments.forEach(a => { a.teacherId = ""; a.lockedSlot = null; });
       state.schedule = null;
       saveAppState(state);
       renderCurrentTab();
@@ -449,18 +475,26 @@ function renderDashboardView() {
       statusText = `超授 ${t.assignedHours - t.baseHours} 節`;
     }
 
-    const homeroomClassText = t.role === 'homeroom' && t.targetClassId ? ` (${t.targetClassId} 導師)` : '';
+    const summaryStr = formatTeacherAssignmentSummary(t);
 
     item.innerHTML = `
-      <div class="teacher-load-info">
-        <span class="teacher-load-name">${t.name}</span>
-        <span class="teacher-load-role">${roleLabels[t.role]}${homeroomClassText}</span>
+      <div class="teacher-load-info" style="flex: 1;">
+        <div class="flex-justify-between align-items-center">
+          <span class="teacher-load-name">${t.name}</span>
+          <span class="teacher-load-role">${roleLabels[t.role]}${homeroomClassText}</span>
+        </div>
+        <div class="text-secondary mt-1" style="font-size: 0.8rem; word-break: break-all;">
+          ${summaryStr}
+        </div>
       </div>
-      <div class="teacher-load-hours text-right">
+      <div class="teacher-load-hours text-right ml-3" style="min-width: 90px;">
         <strong class="${loadClass}">${t.assignedHours} / ${t.baseHours || 0} 節</strong>
         <div style="font-size: 0.7rem; color: var(--text-secondary);">${statusText}</div>
       </div>
     `;
+    item.style.cursor = "pointer";
+    item.title = `點擊查看 ${t.name} 老師詳細配課清單`;
+    item.addEventListener("click", () => openTeacherAssignmentDetailModal(t.id));
     container.appendChild(item);
   });
 }
@@ -518,7 +552,10 @@ function renderTeachersTable(filterQuery = "") {
       <td>${specBadges}</td>
       <td>${busyBadge}</td>
       <td>
-        <button class="btn btn-secondary btn-icon btn-edit-t" data-id="${t.id}" title="編輯教師">
+        <button class="btn btn-secondary btn-icon btn-view-t-detail mr-1" data-id="${t.id}" title="查看配課明細">
+          <i data-lucide="list-checks" style="width: 14px; height: 14px;"></i>
+        </button>
+        <button class="btn btn-secondary btn-icon btn-edit-t mr-1" data-id="${t.id}" title="編輯教師">
           <i data-lucide="edit-3" style="width: 14px; height: 14px;"></i>
         </button>
         <button class="btn btn-danger-outline btn-icon btn-delete-t" data-id="${t.id}" title="刪除教師">
@@ -529,7 +566,14 @@ function renderTeachersTable(filterQuery = "") {
     tbody.appendChild(tr);
   });
 
-  // Bind edit & delete buttons
+  // Bind view detail, edit & delete buttons
+  tbody.querySelectorAll(".btn-view-t-detail").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-id");
+      openTeacherAssignmentDetailModal(id);
+    });
+  });
+
   tbody.querySelectorAll(".btn-edit-t").forEach(btn => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-id");
@@ -606,11 +650,24 @@ function renderClassesAndRooms() {
           <span class="class-card-name">${c.name}</span>
           <span class="class-card-desc">級別: ${c.grade} 年級</span>
           <span class="badge ${statusClass} mt-2" style="font-size: 0.7rem;">配課: ${assigned} / ${targetHours} 節</span>
-          <button class="btn btn-danger-outline btn-icon mt-3 btn-delete-class" data-id="${c.id}" style="padding: 4px; border-radius: 4px;" title="刪除班級">
-            <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i>
-          </button>
+          <div class="flex gap-1 mt-3">
+            <button class="btn btn-secondary-outline btn-icon btn-edit-class" data-id="${c.id}" style="padding: 4px; border-radius: 4px;" title="編輯班級">
+              <i data-lucide="edit-3" style="width: 12px; height: 12px;"></i>
+            </button>
+            <button class="btn btn-danger-outline btn-icon btn-delete-class" data-id="${c.id}" style="padding: 4px; border-radius: 4px;" title="刪除班級">
+              <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i>
+            </button>
+          </div>
         `;
         classContainer.appendChild(card);
+      });
+
+      // Bind edit class buttons
+      classContainer.querySelectorAll(".btn-edit-class").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-id");
+          openClassModal(id);
+        });
       });
 
       // Bind delete class buttons
@@ -979,19 +1036,93 @@ function closeAllModals() {
   });
 }
 
-function openClassModal() {
+function openClassModal(classId = null) {
   const modal = document.getElementById("modal-class");
   const form = document.getElementById("form-class");
+  const title = document.getElementById("modal-class-title");
+  const actionInput = document.getElementById("class-form-action");
+  const oldIdInput = document.getElementById("class-old-id");
+  const idInput = document.getElementById("class-id");
+  const nameInput = document.getElementById("class-name");
+  const gradeInput = document.getElementById("class-grade");
+  const idEditHint = document.getElementById("class-id-edit-hint");
+
   form.reset();
+
+  const cls = classId ? state.classes.find(c => c.id === classId) : null;
+
+  if (cls) {
+    title.textContent = `編輯班級: ${cls.name}`;
+    actionInput.value = "edit";
+    oldIdInput.value = cls.id;
+    idInput.value = cls.id;
+    idInput.disabled = true;
+    if (idEditHint) idEditHint.style.display = "block";
+    nameInput.value = cls.name;
+    gradeInput.value = cls.grade;
+  } else {
+    title.textContent = "手動新增班級";
+    actionInput.value = "create";
+    oldIdInput.value = "";
+    idInput.disabled = false;
+    if (idEditHint) idEditHint.style.display = "none";
+  }
+
   modal.classList.add("open");
   safeCreateIcons();
 }
 
 function handleClassFormSubmit(e) {
   e.preventDefault();
+  const action = document.getElementById("class-form-action").value;
+  const oldId = document.getElementById("class-old-id").value;
   const id = document.getElementById("class-id").value.trim();
   const name = document.getElementById("class-name").value.trim();
   const grade = parseInt(document.getElementById("class-grade").value);
+
+  if (!id || !name || isNaN(grade)) return;
+
+  if (action === "edit") {
+    const cls = state.classes.find(c => c.id === oldId);
+    if (!cls) {
+      alert("找不到原始班級資料！");
+      return;
+    }
+
+    const oldGrade = cls.grade;
+    cls.name = name;
+    cls.grade = grade;
+
+    if (grade !== oldGrade) {
+      // Grade changed: drop assignments for subjects that no longer belong
+      // to this class under the new grade's subject template.
+      const newGradeSubjects = state.subjects.filter(s => s.grade === grade);
+      state.assignments = state.assignments.filter(a =>
+        a.classId !== id || newGradeSubjects.some(s => s.subject === a.subject)
+      );
+      // Add empty assignments for subjects newly applicable under the new grade.
+      newGradeSubjects.forEach(tmpl => {
+        const exists = state.assignments.some(a => a.classId === id && a.subject === tmpl.subject);
+        if (!exists) {
+          state.assignments.push({
+            id: `${id}-${tmpl.subject}`,
+            classId: id,
+            subject: tmpl.subject,
+            weeklyHours: tmpl.weeklyHours,
+            teacherId: "",
+            requiresRoom: tmpl.requiresRoom
+          });
+        }
+      });
+    }
+
+    state.schedule = null;
+    saveAppState(state);
+    closeAllModals();
+    renderCurrentTab();
+    showConsoleLog(`已成功更新班級 ${name} (${id})`);
+    return;
+  }
 
   if (state.classes.some(c => c.id === id)) {
     alert("班級 ID 已存在！請使用其他 ID。");
@@ -1316,18 +1447,22 @@ function setAssignMode(mode) {
   const btnClass = document.getElementById("btn-assign-mode-class");
   const btnTeacher = document.getElementById("btn-assign-mode-teacher");
   const btnUnassigned = document.getElementById("btn-assign-mode-unassigned");
+  const btnOverview = document.getElementById("btn-assign-mode-teacher-overview");
 
   const viewClass = document.getElementById("view-assign-by-class");
   const viewTeacher = document.getElementById("view-assign-by-teacher");
   const viewUnassigned = document.getElementById("view-assign-unassigned");
+  const viewOverview = document.getElementById("view-assign-teacher-overview");
 
   if (btnClass) btnClass.className = mode === "class" ? "btn btn-sm btn-primary flex-1 btn-icon-text" : "btn btn-sm btn-secondary flex-1 btn-icon-text";
   if (btnTeacher) btnTeacher.className = mode === "teacher" ? "btn btn-sm btn-primary flex-1 btn-icon-text" : "btn btn-sm btn-secondary flex-1 btn-icon-text";
   if (btnUnassigned) btnUnassigned.className = mode === "unassigned" ? "btn btn-sm btn-primary flex-1 btn-icon-text" : "btn btn-sm btn-secondary flex-1 btn-icon-text";
+  if (btnOverview) btnOverview.className = mode === "teacher-overview" ? "btn btn-sm btn-primary flex-1 btn-icon-text" : "btn btn-sm btn-secondary flex-1 btn-icon-text";
 
   if (viewClass) viewClass.style.display = mode === "class" ? "block" : "none";
   if (viewTeacher) viewTeacher.style.display = mode === "teacher" ? "block" : "none";
   if (viewUnassigned) viewUnassigned.style.display = mode === "unassigned" ? "block" : "none";
+  if (viewOverview) viewOverview.style.display = mode === "teacher-overview" ? "block" : "none";
 
   if (mode === "class") {
     renderClassAssignments();
@@ -1335,6 +1470,8 @@ function setAssignMode(mode) {
     renderTeacherBatchAssignments();
   } else if (mode === "unassigned") {
     renderUnassignedAssignments();
+  } else if (mode === "teacher-overview") {
+    renderTeacherOverviewAssignments();
   }
 
   updateUnassignedBadge();
@@ -1855,9 +1992,49 @@ function renderClassAssignments() {
       : '<span style="color: var(--text-secondary);">無</span>';
 
     const roleLabels = { director: "主任", leader: "組長", homeroom: "導師", subject: "科任", hourly: "鐘點" };
-    const teacherRoleText = selectedTeacher 
+    const teacherRoleText = selectedTeacher
       ? `<span class="badge badge-secondary">${roleLabels[selectedTeacher.role]}</span>`
       : '—';
+
+    // Locked-slot cell: e.g. 本土語言拆班需鎖定同年級各班於同一時段
+    const dayNames = ["", "一", "二", "三", "四", "五"];
+    let lockCellHtml;
+    if (!assign.teacherId) {
+      lockCellHtml = `<span class="text-secondary" style="font-size:11px;">請先指派教師</span>`;
+    } else if (assign.lockedSlot) {
+      lockCellHtml = `
+        <div class="flex align-items-center gap-1 flex-wrap">
+          <span class="badge bg-warning" style="font-size:11px;"><i data-lucide="lock" class="icon-small"></i> 週${dayNames[assign.lockedSlot.day]} 第${assign.lockedSlot.period}節</span>
+          <button class="btn btn-xs btn-secondary-outline btn-unlock-assign" data-assign-id="${assign.id}" title="解除鎖定">
+            <i data-lucide="lock-open"></i>
+          </button>
+        </div>
+      `;
+    } else {
+      lockCellHtml = `
+        <div class="flex gap-1 align-items-center flex-wrap">
+          <select class="select-field select-lock-day" data-assign-id="${assign.id}" style="width:60px; padding:2px 4px; font-size:11px;">
+            <option value="1">週一</option>
+            <option value="2">週二</option>
+            <option value="3">週三</option>
+            <option value="4">週四</option>
+            <option value="5">週五</option>
+          </select>
+          <select class="select-field select-lock-period" data-assign-id="${assign.id}" style="width:56px; padding:2px 4px; font-size:11px;">
+            <option value="1">1節</option>
+            <option value="2">2節</option>
+            <option value="3">3節</option>
+            <option value="4">4節</option>
+            <option value="5">5節</option>
+            <option value="6">6節</option>
+            <option value="7">7節</option>
+          </select>
+          <button class="btn btn-xs btn-secondary-outline btn-lock-assign" data-assign-id="${assign.id}" title="鎖定此時段">
+            <i data-lucide="lock"></i>
+          </button>
+        </div>
+      `;
+    }
 
     tr.innerHTML = `
       <td><strong>${tmpl.subject}</strong> ${isHomeroomMain ? '<span class="badge badge-info" style="font-size: 0.65rem; padding: 2px 4px;">導師主科</span>' : ''}</td>
@@ -1866,25 +2043,26 @@ function renderClassAssignments() {
       <td>${teacherSelectHtml}</td>
       <td>${teacherRoleText}</td>
       <td>${matchIndicator}</td>
+      <td>${lockCellHtml}</td>
     `;
     tbody.appendChild(tr);
   });
 
   document.getElementById("class-assigned-hours").textContent = currentAssigned;
-  
+
   // Re-bind select change listeners
   tbody.querySelectorAll(".select-assign-teacher").forEach(sel => {
     sel.addEventListener("change", (e) => {
       const assignId = e.target.getAttribute("data-assign-id");
       const teacherId = e.target.value;
-      
+
       const assign = state.assignments.find(a => a.id === assignId);
       if (assign) {
         assign.teacherId = teacherId;
         // Schedule is invalidated when assignment changes
         state.schedule = null;
         saveAppState(state);
-        
+
         // Dynamic re-render
         renderClassAssignments();
         renderTeacherLoadsSidebar();
@@ -1892,6 +2070,41 @@ function renderClassAssignments() {
       }
     });
   });
+
+  // Re-bind per-assignment lock/unlock buttons
+  tbody.querySelectorAll(".btn-lock-assign").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const assignId = e.currentTarget.getAttribute("data-assign-id");
+      const row = e.currentTarget.closest("tr");
+      const daySel = row.querySelector(".select-lock-day");
+      const periodSel = row.querySelector(".select-lock-period");
+      const assign = state.assignments.find(a => a.id === assignId);
+      if (assign && daySel && periodSel) {
+        assign.lockedSlot = { day: parseInt(daySel.value), period: parseInt(periodSel.value) };
+        state.schedule = null;
+        saveAppState(state);
+        renderClassAssignments();
+        showConsoleLog(`已鎖定「${assign.subject}」於週${["", "一", "二", "三", "四", "五"][assign.lockedSlot.day]} 第${assign.lockedSlot.period}節，請重新執行自動排課引擎以套用。`);
+      }
+    });
+  });
+
+  tbody.querySelectorAll(".btn-unlock-assign").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const assignId = e.currentTarget.getAttribute("data-assign-id");
+      const assign = state.assignments.find(a => a.id === assignId);
+      if (assign) {
+        assign.lockedSlot = null;
+        state.schedule = null;
+        saveAppState(state);
+        renderClassAssignments();
+        showConsoleLog(`已解除「${assign.subject}」的鎖定時段，請重新執行自動排課引擎以套用。`);
+      }
+    });
+  });
+
+  populateGradeLockSubjects();
+  safeCreateIcons();
 
   // Update tabs header status
   const check = validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
@@ -1904,6 +2117,100 @@ function renderClassAssignments() {
     tabProgressText.textContent = `${check.totalAssigned} / ${check.totalTargetHours} 節 (${progressPercent}%)`;
     tabProgressBar.style.width = `${progressPercent}%`;
   }
+}
+
+/**
+ * Refresh the subject dropdown in the grade-wide lock tool to match the
+ * currently selected grade's subject list.
+ */
+function populateGradeLockSubjects() {
+  const gradeSel = document.getElementById("grade-lock-grade");
+  const subjectSel = document.getElementById("grade-lock-subject");
+  if (!gradeSel || !subjectSel) return;
+
+  const grade = parseInt(gradeSel.value);
+  const prevValue = subjectSel.value;
+  const subjectsForGrade = state.subjects.filter(s => s.grade === grade);
+
+  subjectSel.innerHTML = subjectsForGrade.map(s => `<option value="${s.subject}">${s.subject}</option>`).join('');
+
+  if (subjectsForGrade.some(s => s.subject === prevValue)) {
+    subjectSel.value = prevValue;
+  }
+}
+
+/**
+ * Lock a subject to one fixed day/period across every class in a grade -
+ * e.g. 本土語言 split-class courses that must run simultaneously so
+ * students can regroup across their original homeroom classes.
+ */
+function applyGradeLock() {
+  const grade = parseInt(document.getElementById("grade-lock-grade").value);
+  const subject = document.getElementById("grade-lock-subject").value;
+  const day = parseInt(document.getElementById("grade-lock-day").value);
+  const period = parseInt(document.getElementById("grade-lock-period").value);
+  const statusEl = document.getElementById("grade-lock-status");
+  const dayNames = ["", "一", "二", "三", "四", "五"];
+
+  if (!subject) {
+    if (statusEl) statusEl.innerHTML = `<span class="text-warning">請先選擇科目。</span>`;
+    return;
+  }
+
+  const gradeClasses = state.classes.filter(c => c.grade === grade);
+  const targetAssignments = state.assignments.filter(a =>
+    gradeClasses.some(c => c.id === a.classId) && a.subject === subject
+  );
+
+  if (targetAssignments.length === 0) {
+    if (statusEl) statusEl.innerHTML = `<span class="text-warning">找不到「${grade}年級」的「${subject}」配課紀錄。</span>`;
+    return;
+  }
+
+  const missingTeacher = targetAssignments.filter(a => !a.teacherId);
+  if (missingTeacher.length > 0) {
+    if (statusEl) statusEl.innerHTML = `<span class="text-warning">⚠️ 以下班級尚未指派教師，無法鎖定：${missingTeacher.map(a => a.classId).join('、')}。請先完成配課再鎖定。</span>`;
+    return;
+  }
+
+  targetAssignments.forEach(a => {
+    a.lockedSlot = { day, period };
+  });
+
+  // The current schedule (if any) doesn't yet honor this lock - require regeneration.
+  state.schedule = null;
+  saveAppState(state);
+  renderClassAssignments();
+
+  if (statusEl) statusEl.innerHTML = `<span class="text-success">✅ 已將 ${targetAssignments.length} 個班級的「${subject}」鎖定於週${dayNames[day]} 第${period}節。請重新執行自動排課引擎以套用。</span>`;
+  showConsoleLog(`已鎖定 ${grade}年級「${subject}」共 ${targetAssignments.length} 班於週${dayNames[day]}第${period}節。`);
+}
+
+/**
+ * Clear the grade-wide lock previously applied by applyGradeLock().
+ */
+function clearGradeLock() {
+  const grade = parseInt(document.getElementById("grade-lock-grade").value);
+  const subject = document.getElementById("grade-lock-subject").value;
+  const statusEl = document.getElementById("grade-lock-status");
+
+  const gradeClasses = state.classes.filter(c => c.grade === grade);
+  const targetAssignments = state.assignments.filter(a =>
+    gradeClasses.some(c => c.id === a.classId) && a.subject === subject && a.lockedSlot
+  );
+
+  if (targetAssignments.length === 0) {
+    if (statusEl) statusEl.innerHTML = `「${grade}年級」的「${subject}」目前沒有鎖定設定。`;
+    return;
+  }
+
+  targetAssignments.forEach(a => { a.lockedSlot = null; });
+  state.schedule = null;
+  saveAppState(state);
+  renderClassAssignments();
+
+  if (statusEl) statusEl.innerHTML = `已清除 ${targetAssignments.length} 個班級的「${subject}」鎖定設定。`;
+  showConsoleLog(`已清除 ${grade}年級「${subject}」鎖定設定 (${targetAssignments.length} 筆)。`);
 }
 
 function renderTeacherLoadsSidebar() {
@@ -1930,15 +2237,25 @@ function renderTeacherLoadsSidebar() {
       loadClass = "load-status-over";
     }
 
+    const summaryStr = formatTeacherAssignmentSummary(t);
+
     item.innerHTML = `
-      <div class="teacher-load-info">
-        <span class="teacher-load-name">${t.name}</span>
-        <span class="teacher-load-role">${roleLabels[t.role]}${t.targetClassId ? ` (${t.targetClassId}導)` : ''}</span>
-      </div>
-      <div class="teacher-load-hours">
-        <strong class="${loadClass}">${t.assignedHours} / ${t.baseHours || 0} 節</strong>
+      <div class="teacher-load-info" style="flex: 1;">
+        <div class="flex-justify-between align-items-center mb-1">
+          <div>
+            <span class="teacher-load-name">${t.name}</span>
+            <span class="teacher-load-role" style="margin-left: 4px;">${roleLabels[t.role]}${t.targetClassId ? ` (${t.targetClassId}導)` : ''}</span>
+          </div>
+          <strong class="${loadClass}">${t.assignedHours} / ${t.baseHours || 0} 節</strong>
+        </div>
+        <div class="text-secondary mt-1" style="font-size: 0.75rem; word-break: break-all; line-height: 1.3;">
+          ${summaryStr}
+        </div>
       </div>
     `;
+    item.style.cursor = "pointer";
+    item.title = `點擊查看 ${t.name} 老師詳細配課清單`;
+    item.addEventListener("click", () => openTeacherAssignmentDetailModal(t.id));
     container.appendChild(item);
   });
 }
@@ -2250,6 +2567,8 @@ function renderTimetableGrid() {
     { num: 7, time: "15:10 - 15:50" }
   ];
 
+  const targetClass = dimension === "class" ? state.classes.find(c => c.id === targetId) : null;
+
   periodsTiming.forEach(p => {
     const tr = document.createElement("tr");
 
@@ -2274,13 +2593,24 @@ function renderTimetableGrid() {
 
     // 5 Days column
     for (let day = 1; day <= 5; day++) {
+      // Periods 6 & 7: if the whole afternoon (5-7) is dismissed for this
+      // class's grade, they're already covered by period 5's rowspan cell.
+      if (dimension === "class" && p.num >= 6 && isClassAfternoonLocked(targetClass, day)) {
+        continue;
+      }
+
       const td = document.createElement("td");
       td.setAttribute("data-day", day);
       td.setAttribute("data-period", p.num);
 
       // Render content based on selected dimension
       if (dimension === "class") {
-        renderClassCell(td, targetId, day, p.num);
+        if (p.num === 5 && isClassAfternoonLocked(targetClass, day)) {
+          td.className = "slot-locked";
+          td.rowSpan = 3;
+        } else {
+          renderClassCell(td, targetId, day, p.num);
+        }
       } else if (dimension === "teacher") {
         renderTeacherCell(td, targetId, day, p.num);
       } else if (dimension === "room") {
@@ -2301,25 +2631,25 @@ function renderTimetableGrid() {
   safeCreateIcons();
 }
 
+/**
+ * Whether the whole afternoon (periods 5-7) is dismissed / has no class
+ * for this class's grade on the given day. The lock is all-or-nothing
+ * across periods 5-7, so checking a single period is enough.
+ */
+function isClassAfternoonLocked(cls, day) {
+  if (!cls) return false;
+  if (cls.grade <= 2) return day !== 2;
+  if (cls.grade >= 3 && cls.grade <= 4) return day === 3 || day === 5;
+  if (cls.grade >= 5) return day === 3;
+  return false;
+}
+
 function renderClassCell(td, classId, day, period) {
   // Check if slot is disabled/locked for this grade
   const cls = state.classes.find(c => c.id === classId);
-  if (cls) {
-    if (cls.grade <= 2 && period >= 5 && day !== 2) {
-      td.className = "slot-locked";
-      td.innerHTML = "下課放學";
-      return;
-    }
-    if (cls.grade >= 3 && cls.grade <= 4 && period >= 5 && (day === 3 || day === 5)) {
-      td.className = "slot-locked";
-      td.innerHTML = "下課放學";
-      return;
-    }
-    if (cls.grade >= 5 && period >= 5 && day === 3) {
-      td.className = "slot-locked";
-      td.innerHTML = "下課放學";
-      return;
-    }
+  if (period >= 5 && isClassAfternoonLocked(cls, day)) {
+    td.className = "slot-locked";
+    return;
   }
 
   const cell = state.schedule[classId]?.[`${day}-${period}`];
@@ -2327,15 +2657,29 @@ function renderClassCell(td, classId, day, period) {
     const teacher = state.teachers.find(t => t.id === cell.teacherId);
     const roomNameStr = cell.requiresRoom ? ((state.rooms || SPECIAL_ROOMS)[cell.requiresRoom]?.name || cell.requiresRoom) : '';
     const roomBadge = cell.requiresRoom ? `<span class="timetable-card-room">${roomNameStr}</span>` : '';
-    
+    const colorClass = getTeacherColorClass(cell.teacherId);
+    const isLocked = Boolean(cell.locked);
+
+    if (isLocked) td.classList.add("cell-pinned");
+
     td.innerHTML = `
-      <div class="timetable-card" draggable="true" data-subject="${cell.subject}" data-teacher-id="${cell.teacherId}" data-room="${cell.requiresRoom || ''}">
+      <div class="timetable-card ${colorClass} ${isLocked ? 'pinned' : ''}" draggable="${isLocked ? 'false' : 'true'}" data-subject="${cell.subject}" data-teacher-id="${cell.teacherId}" data-room="${cell.requiresRoom || ''}" data-locked="${isLocked}" title="${isLocked ? '此課程已鎖定固定時段' : ''}">
+        ${isLocked ? '<i data-lucide="lock" class="timetable-card-lock-icon"></i>' : ''}
         <span class="timetable-card-subject">${cell.subject}</span>
         <span class="timetable-card-teacher">${teacher ? teacher.name : cell.teacherId}</span>
         ${roomBadge}
       </div>
     `;
   }
+}
+
+/**
+ * Course card color by teacher role: homeroom teachers' own classes are
+ * light blue, everyone else's (subject/director/leader/hourly) are light green.
+ */
+function getTeacherColorClass(teacherId) {
+  const t = state.teachers.find(x => x.id === teacherId);
+  return (t && t.role === 'homeroom') ? 'role-homeroom' : 'role-other';
 }
 
 function renderTeacherCell(td, teacherId, day, period) {
@@ -2413,7 +2757,7 @@ function renderRoomCell(td, roomKey, day, period) {
 // ----------------------------------------------------
 function enableDragAndDropEvents(classId) {
   const cards = document.querySelectorAll("#timetable-tbody .timetable-card");
-  const cells = document.querySelectorAll("#timetable-tbody td:not(.time-cell):not(.slot-locked)");
+  const cells = document.querySelectorAll("#timetable-tbody td:not(.time-cell):not(.slot-locked):not(.cell-pinned)");
 
   cards.forEach(card => {
     card.addEventListener("dragstart", (e) => {
@@ -2459,7 +2803,8 @@ function enableDragAndDropEvents(classId) {
       const lesson = {
         subject: draggedElement.getAttribute("data-subject"),
         teacherId: draggedElement.getAttribute("data-teacher-id"),
-        requiresRoom: draggedElement.getAttribute("data-room") || null
+        requiresRoom: draggedElement.getAttribute("data-room") || null,
+        locked: draggedElement.getAttribute("data-locked") === "true"
       };
 
       const check = validateManualMove(
@@ -2502,7 +2847,8 @@ function enableDragAndDropEvents(classId) {
       const lesson = {
         subject: draggedElement.getAttribute("data-subject"),
         teacherId: draggedElement.getAttribute("data-teacher-id"),
-        requiresRoom: draggedElement.getAttribute("data-room") || null
+        requiresRoom: draggedElement.getAttribute("data-room") || null,
+        locked: draggedElement.getAttribute("data-locked") === "true"
       };
 
       // Perform validation check
@@ -2528,7 +2874,8 @@ function enableDragAndDropEvents(classId) {
         state.schedule[classId][targetKey] = {
           subject: lesson.subject,
           teacherId: lesson.teacherId,
-          requiresRoom: lesson.requiresRoom
+          requiresRoom: lesson.requiresRoom,
+          locked: false
         };
 
         if (tempTarget) {
@@ -2806,12 +3153,22 @@ function renderSubjects() {
       </td>
       <td>${s.requiresRoom ? `<span class="badge badge-primary">${s.requiresRoom}教室</span>` : '無'}</td>
       <td>
+        <button class="btn-edit-subject btn-secondary btn-icon-only mr-1" data-id="${s.id}" title="編輯科目">
+          <i data-lucide="edit-3" style="width: 16px; height: 16px;"></i>
+        </button>
         <button class="btn-delete-subject btn-danger btn-icon-only" data-id="${s.id}" title="刪除科目">
           <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
         </button>
       </td>
     `;
     tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll(".btn-edit-subject").forEach(btn => {
+    btn.onclick = function() {
+      const id = btn.getAttribute("data-id");
+      openSubjectModal(id);
+    };
   });
 
   tbody.querySelectorAll(".btn-toggle-homeroom").forEach(btn => {
@@ -2860,9 +3217,13 @@ function deleteSubject(id) {
   }
 }
 
-function openSubjectModal() {
+function openSubjectModal(subjectId = null) {
   const modal = document.getElementById("modal-subject");
-  document.getElementById("form-subject").reset();
+  const form = document.getElementById("form-subject");
+  const title = document.getElementById("modal-subject-title");
+  const actionInput = document.getElementById("subject-form-action");
+  const oldIdInput = document.getElementById("subject-old-id");
+  form.reset();
 
   const isHomeroomCb = document.getElementById("subject-is-homeroom");
   if (isHomeroomCb) isHomeroomCb.checked = true;
@@ -2877,11 +3238,32 @@ function openSubjectModal() {
     });
   }
 
+  const sub = subjectId ? state.subjects.find(s => s.id === subjectId) : null;
+
+  if (sub) {
+    if (title) title.textContent = `編輯科目: ${sub.grade}年級 ${sub.subject}`;
+    if (actionInput) actionInput.value = "edit";
+    if (oldIdInput) oldIdInput.value = sub.id;
+    document.getElementById("subject-grade").value = sub.grade;
+    document.getElementById("subject-name").value = sub.subject;
+    document.getElementById("subject-hours").value = sub.weeklyHours;
+    if (roomSelect) roomSelect.value = sub.requiresRoom || "";
+    if (isHomeroomCb) isHomeroomCb.checked = Boolean(sub.isHomeroomMain);
+  } else {
+    if (title) title.textContent = "手動新增科目";
+    if (actionInput) actionInput.value = "create";
+    if (oldIdInput) oldIdInput.value = "";
+  }
+
   modal.classList.add("open");
+  safeCreateIcons();
 }
 
 function handleSubjectFormSubmit(e) {
   e.preventDefault();
+  const action = document.getElementById("subject-form-action").value;
+  const oldId = document.getElementById("subject-old-id").value;
+
   const grade = parseInt(document.getElementById("subject-grade").value);
   const name = document.getElementById("subject-name").value.trim();
   const hours = parseInt(document.getElementById("subject-hours").value);
@@ -2892,11 +3274,88 @@ function handleSubjectFormSubmit(e) {
 
   if (!name || isNaN(grade) || isNaN(hours)) return;
 
-  const subjectId = `${grade}-${name}`;
-  const existingIndex = state.subjects.findIndex(s => s.id === subjectId);
-  
+  const newId = `${grade}-${name}`;
+
+  if (action === "edit") {
+    const sub = state.subjects.find(s => s.id === oldId);
+    if (!sub) {
+      alert("找不到原始科目資料！");
+      return;
+    }
+    if (newId !== oldId && state.subjects.some(s => s.id === newId)) {
+      alert(`科目「${name}」於${grade}年級已存在，請使用不同名稱或年級。`);
+      return;
+    }
+
+    const oldGrade = sub.grade;
+    const oldName = sub.subject;
+
+    sub.id = newId;
+    sub.grade = grade;
+    sub.subject = name;
+    sub.weeklyHours = hours;
+    sub.requiresRoom = room;
+    sub.isHomeroomMain = isHomeroomMain;
+
+    if (grade === oldGrade) {
+      // Same grade: rename/update the matching assignment for every class of this grade.
+      state.classes.forEach(c => {
+        if (c.grade !== grade) return;
+        const assign = state.assignments.find(a => a.classId === c.id && a.subject === oldName);
+        if (assign) {
+          assign.id = `${c.id}-${name}`;
+          assign.subject = name;
+          assign.weeklyHours = hours;
+          assign.requiresRoom = room;
+        } else {
+          state.assignments.push({
+            id: `${c.id}-${name}`,
+            classId: c.id,
+            subject: name,
+            weeklyHours: hours,
+            teacherId: "",
+            requiresRoom: room
+          });
+        }
+      });
+    } else {
+      // Grade changed: this subject no longer applies to the old grade's classes.
+      const oldGradeClassIds = state.classes.filter(c => c.grade === oldGrade).map(c => c.id);
+      state.assignments = state.assignments.filter(a =>
+        !(oldGradeClassIds.includes(a.classId) && a.subject === oldName)
+      );
+      // Give the new grade's classes a matching (empty) assignment.
+      state.classes.forEach(c => {
+        if (c.grade !== grade) return;
+        const exists = state.assignments.some(a => a.classId === c.id && a.subject === name);
+        if (!exists) {
+          state.assignments.push({
+            id: `${c.id}-${name}`,
+            classId: c.id,
+            subject: name,
+            weeklyHours: hours,
+            teacherId: "",
+            requiresRoom: room
+          });
+        }
+      });
+    }
+
+    state.schedule = null;
+    saveAppState(state);
+    closeAllModals();
+    renderSubjects();
+    renderClassesAndRooms();
+    renderClassAssignments();
+    showConsoleLog(`已成功更新科目: ${grade}年級 ${name} (${hours} 節)`);
+    return;
+  }
+
+  // Create / upsert-by-id (only reachable when creating a brand-new subject)
+  const existingIndex = state.subjects.findIndex(s => s.id === newId);
+
   const newSub = {
-    id: subjectId,
+    id: newId,
     grade: grade,
     subject: name,
     weeklyHours: hours,
@@ -3051,3 +3510,431 @@ function downloadSubjectCSVTemplate() {
   a.click();
   document.body.removeChild(a);
 }
+
+// ----------------------------------------------------
+// TEACHER ASSIGNMENT OVERVIEW & DETAIL FUNCTIONS
+// ----------------------------------------------------
+/**
+ * Build the one-line assignment summary text for a teacher,
+ * e.g. "張主任：已配 3 節，101健康(1)、301體育(2)"
+ */
+function formatTeacherAssignmentSummary(teacher) {
+  const assigned = state.assignments.filter(a => a.teacherId === teacher.id);
+
+  if (assigned.length === 0) {
+    return `${teacher.name}：尚未配課`;
+  }
+
+  const items = assigned.map(a => {
+    const cls = state.classes.find(c => c.id === a.classId);
+    const className = cls ? cls.name : a.classId;
+    return `${className}${a.subject}(${a.weeklyHours})`;
+  });
+
+  return `${teacher.name}：已配 ${teacher.assignedHours} 節，${items.join('、')}`;
+}
+
+/**
+ * Render Full Teacher Assignment Overview Mode (全校教師配課明細總覽)
+ */
+function renderTeacherOverviewAssignments() {
+  const container = document.getElementById("teacher-overview-list-container");
+  if (!container) return;
+
+  // Always sync teacher assigned hours validation first
+  validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
+
+  const roleFilter = document.getElementById("select-overview-role-filter")?.value || "all";
+  const statusFilter = document.getElementById("select-overview-status-filter")?.value || "all";
+  const searchText = (document.getElementById("input-overview-search")?.value || "").trim().toLowerCase();
+
+  const roleLabels = { director: "主任", leader: "組長", homeroom: "導師", subject: "科任", hourly: "鐘點" };
+
+  // Calculate statistics across all teachers
+  let totalCount = 0;
+  let exactCount = 0;
+  let underCount = 0;
+  let overCount = 0;
+
+  state.teachers.forEach(t => {
+    if (t.role === 'hourly') {
+      exactCount++;
+    } else if (t.assignedHours === t.baseHours) {
+      exactCount++;
+    } else if (t.assignedHours < t.baseHours) {
+      underCount++;
+    } else if (t.assignedHours > t.baseHours) {
+      overCount++;
+    }
+  });
+
+  const statTotal = document.getElementById("stat-overview-total-count");
+  const statExact = document.getElementById("stat-overview-exact-count");
+  const statUnder = document.getElementById("stat-overview-under-count");
+  const statOver = document.getElementById("stat-overview-over-count");
+
+  if (statTotal) statTotal.textContent = state.teachers.length;
+  if (statExact) statExact.textContent = exactCount;
+  if (statUnder) statUnder.textContent = underCount;
+  if (statOver) statOver.textContent = overCount;
+
+  // Filter teachers
+  const filteredTeachers = state.teachers.filter(t => {
+    // Role filter
+    if (roleFilter !== "all" && t.role !== roleFilter) return false;
+
+    // Status filter
+    if (statusFilter !== "all") {
+      if (t.role === 'hourly') {
+        if (statusFilter !== "exact") return false;
+      } else {
+        if (statusFilter === "exact" && t.assignedHours !== t.baseHours) return false;
+        if (statusFilter === "under" && t.assignedHours >= t.baseHours) return false;
+        if (statusFilter === "over" && t.assignedHours <= t.baseHours) return false;
+      }
+    }
+
+    // Search text
+    if (searchText) {
+      const teacherMatch = t.name.toLowerCase().includes(searchText) || 
+                           t.id.toLowerCase().includes(searchText) || 
+                           (roleLabels[t.role] || "").toLowerCase().includes(searchText);
+
+      // Check assigned subjects match
+      const assigned = state.assignments.filter(a => a.teacherId === t.id);
+      const assignmentMatch = assigned.some(a => {
+        const c = state.classes.find(cls => cls.id === a.classId);
+        return (c && c.name.toLowerCase().includes(searchText)) || a.subject.toLowerCase().includes(searchText);
+      });
+
+      if (!teacherMatch && !assignmentMatch) return false;
+    }
+
+    return true;
+  });
+
+  if (filteredTeachers.length === 0) {
+    container.innerHTML = `
+      <div class="glass-card p-5 text-center text-secondary">
+        <i data-lucide="search-x" class="panel-icon mb-2" style="font-size: 2.5rem;"></i>
+        <div>沒有符合篩選條件的教師配課紀錄</div>
+      </div>
+    `;
+    safeCreateIcons();
+    return;
+  }
+
+  // Sort teachers
+  filteredTeachers.sort((a, b) => {
+    if (a.role === 'hourly' && b.role !== 'hourly') return 1;
+    if (a.role !== 'hourly' && b.role === 'hourly') return -1;
+
+    const devA = Math.abs(a.assignedHours - a.baseHours);
+    const devB = Math.abs(b.assignedHours - b.baseHours);
+    if (devA !== devB) return devB - devA;
+
+    return a.id.localeCompare(b.id);
+  });
+
+  const rowsHtml = filteredTeachers.map(t => {
+    const assigned = state.assignments.filter(a => a.teacherId === t.id);
+
+    // Status text & badge class
+    let statusBadgeHtml = '';
+    if (t.role === 'hourly') {
+      statusBadgeHtml = `<span class="badge bg-info" style="font-size:11px;">鐘點授課</span>`;
+    } else if (t.assignedHours === t.baseHours) {
+      statusBadgeHtml = `<span class="badge bg-success" style="font-size:11px;">✓ 達標</span>`;
+    } else if (t.assignedHours < t.baseHours) {
+      statusBadgeHtml = `<span class="badge bg-warning" style="font-size:11px;">⚠️ 不足 ${t.baseHours - t.assignedHours} 節</span>`;
+    } else {
+      statusBadgeHtml = `<span class="badge bg-danger" style="font-size:11px;">⚡ 超授 ${t.assignedHours - t.baseHours} 節</span>`;
+    }
+
+    // Column 3: all assignment details merged into one cell, comma-separated (e.g. 101健康(1), 301體育(2))
+    const detailText = assigned.length > 0
+      ? assigned.map(a => {
+          const cls = state.classes.find(c => c.id === a.classId);
+          const className = cls ? cls.name : a.classId;
+          return `${className}${a.subject}(${a.weeklyHours})`;
+        }).join(', ')
+      : '';
+    const detailCellHtml = detailText
+      ? `<td class="teacher-overview-detail-cell">${detailText}</td>`
+      : `<td class="teacher-overview-detail-cell text-secondary style-italic">尚未配課</td>`;
+
+    return `
+      <tr class="teacher-overview-row" data-teacher-id="${t.id}" title="點擊查看 ${t.name} 老師詳細配課表格">
+        <td style="white-space:nowrap;">
+          <div class="flex align-items-center gap-2 flex-wrap">
+            <strong style="color: var(--text-light);">${t.name}</strong>
+            <span class="badge bg-secondary" style="font-size:11px;">${roleLabels[t.role] || t.role}</span>
+            ${t.targetClassId ? `<span class="badge bg-info" style="font-size:11px;">${t.targetClassId} 導師</span>` : ''}
+          </div>
+        </td>
+        <td style="white-space:nowrap;">
+          <strong>${t.assignedHours}</strong> / ${t.baseHours || 0} 節
+          <div class="mt-1">${statusBadgeHtml}</div>
+        </td>
+        ${detailCellHtml}
+      </tr>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <table class="table teacher-overview-table">
+      <thead>
+        <tr>
+          <th style="min-width:150px;">教師姓名</th>
+          <th style="min-width:110px;">已配節數</th>
+          <th>配課明細（班級科目(節數)）</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
+  `;
+
+  // Row click opens the detail modal
+  container.querySelectorAll(".teacher-overview-row").forEach(row => {
+    row.addEventListener("click", () => {
+      const teacherId = row.getAttribute("data-teacher-id");
+      if (teacherId) openTeacherAssignmentDetailModal(teacherId);
+    });
+  });
+
+  safeCreateIcons();
+}
+
+/**
+ * Copy all filtered teacher summaries to clipboard
+ */
+function copyAllTeacherSummaries() {
+  const roleFilter = document.getElementById("select-overview-role-filter")?.value || "all";
+  const statusFilter = document.getElementById("select-overview-status-filter")?.value || "all";
+  const searchText = (document.getElementById("input-overview-search")?.value || "").trim().toLowerCase();
+
+  const roleLabels = { director: "主任", leader: "組長", homeroom: "導師", subject: "科任", hourly: "鐘點" };
+
+  const filtered = state.teachers.filter(t => {
+    if (roleFilter !== "all" && t.role !== roleFilter) return false;
+    if (statusFilter !== "all") {
+      if (t.role === 'hourly') {
+        if (statusFilter !== "exact") return false;
+      } else {
+        if (statusFilter === "exact" && t.assignedHours !== t.baseHours) return false;
+        if (statusFilter === "under" && t.assignedHours >= t.baseHours) return false;
+        if (statusFilter === "over" && t.assignedHours <= t.baseHours) return false;
+      }
+    }
+    if (searchText) {
+      const teacherMatch = t.name.toLowerCase().includes(searchText) || 
+                           t.id.toLowerCase().includes(searchText) || 
+                           (roleLabels[t.role] || "").toLowerCase().includes(searchText);
+      const assigned = state.assignments.filter(a => a.teacherId === t.id);
+      const assignmentMatch = assigned.some(a => {
+        const c = state.classes.find(cls => cls.id === a.classId);
+        return (c && c.name.toLowerCase().includes(searchText)) || a.subject.toLowerCase().includes(searchText);
+      });
+      if (!teacherMatch && !assignmentMatch) return false;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    alert("目前沒有可複製的教師配課摘要！");
+    return;
+  }
+
+  const summaries = filtered.map(t => formatTeacherAssignmentSummary(t)).join("\n");
+
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(summaries).then(() => {
+      alert(`已成功複製 ${filtered.length} 位教師的配課摘要文字！`);
+      showConsoleLog(`已複製 ${filtered.length} 位教師配課摘要。`);
+    }).catch(() => {
+      fallbackCopyText(summaries, filtered.length);
+    });
+  } else {
+    fallbackCopyText(summaries, filtered.length);
+  }
+}
+
+function fallbackCopyText(text, count) {
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  document.body.appendChild(textArea);
+  textArea.select();
+  try {
+    document.execCommand("copy");
+    alert(`已成功複製 ${count} 位教師的配課摘要文字！`);
+  } catch (err) {
+    alert("複製失敗，請手動全選文字複製。");
+  }
+  document.body.removeChild(textArea);
+}
+
+/**
+ * Export Full Teacher Assignment Breakdown Overview to Excel (.xlsx)
+ */
+function exportTeacherOverviewExcel() {
+  if (typeof XLSX === "undefined") {
+    alert("SheetJS (XLSX) 匯出模組未載入，無法匯出 Excel 檔案。");
+    return;
+  }
+
+  validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
+
+  const roleLabels = { director: "主任", leader: "組長", homeroom: "導師", subject: "科任", hourly: "鐘點" };
+
+  // Mirror the on-screen table: one row per teacher, all assignment records merged into one comma-separated column
+  const exportData = state.teachers.map(t => {
+    const teacherAssignments = state.assignments.filter(a => a.teacherId === t.id);
+
+    let statusText = "剛好達標";
+    if (t.role === 'hourly') {
+      statusText = "鐘點兼任";
+    } else if (t.assignedHours < t.baseHours) {
+      statusText = `不足 ${t.baseHours - t.assignedHours} 節`;
+    } else if (t.assignedHours > t.baseHours) {
+      statusText = `超授 ${t.assignedHours - t.baseHours} 節`;
+    }
+
+    const detailText = teacherAssignments.map(assign => {
+      const cls = state.classes.find(c => c.id === assign.classId);
+      const className = cls ? cls.name : assign.classId;
+      return `${className}${assign.subject}(${assign.weeklyHours})`;
+    }).join(', ');
+
+    return {
+      "教師編號": t.id,
+      "教師姓名": t.name,
+      "職務身分": roleLabels[t.role] || t.role,
+      "已配節數": t.assignedHours,
+      "基本節數": t.baseHours || 0,
+      "負擔狀態": statusText,
+      "帶班班級": t.targetClassId || "無",
+      "配課明細": detailText || "尚未配課"
+    };
+  });
+
+  const worksheet = XLSX.utils.json_to_sheet(exportData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "教師配課總覽表");
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(workbook, `全校教師配課明細總覽_${todayStr}.xlsx`);
+  showConsoleLog("已成功匯出「全校教師配課明細總覽」Excel 試算表！");
+}
+
+/**
+ * Open Single Teacher Assignment Detail Modal
+ */
+function openTeacherAssignmentDetailModal(teacherId) {
+  const teacher = state.teachers.find(t => t.id === teacherId);
+  if (!teacher) return;
+
+  validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
+
+  const roleLabels = { director: "主任", leader: "組長", homeroom: "導師", subject: "科任", hourly: "鐘點" };
+  const teacherAssignments = state.assignments.filter(a => a.teacherId === teacher.id);
+
+  const modal = document.getElementById("modal-teacher-assignment-detail");
+  const title = document.getElementById("modal-teacher-detail-title");
+  const body = document.getElementById("modal-teacher-detail-body");
+
+  if (!modal || !body) return;
+
+  title.innerHTML = `<i data-lucide="user-check" class="panel-icon text-primary"></i> ${teacher.name} 老師 - 配課明細表`;
+
+  let statusBadge = '';
+  if (teacher.role === 'hourly') {
+    statusBadge = `<span class="badge bg-info">鐘點授課 (${teacher.assignedHours} 節)</span>`;
+  } else if (teacher.assignedHours === teacher.baseHours) {
+    statusBadge = `<span class="badge bg-success">剛好達標 (${teacher.assignedHours}/${teacher.baseHours} 節)</span>`;
+  } else if (teacher.assignedHours < teacher.baseHours) {
+    statusBadge = `<span class="badge bg-warning">不足 ${teacher.baseHours - teacher.assignedHours} 節 (${teacher.assignedHours}/${teacher.baseHours} 節)</span>`;
+  } else {
+    statusBadge = `<span class="badge bg-danger">超授 ${teacher.assignedHours - teacher.baseHours} 節 (${teacher.assignedHours}/${teacher.baseHours} 節)</span>`;
+  }
+
+  let tableHtml = "";
+  if (teacherAssignments.length === 0) {
+    tableHtml = `<div class="p-4 text-center text-muted style-italic">目前尚無排定任何班級課程。</div>`;
+  } else {
+    tableHtml = `
+      <table class="table mt-3">
+        <thead>
+          <tr>
+            <th>授課班級</th>
+            <th>科目名稱</th>
+            <th style="text-align:center;">每週節數</th>
+            <th>特殊教室</th>
+            <th>類別/專長</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${teacherAssignments.map(assign => {
+            const cls = state.classes.find(c => c.id === assign.classId);
+            const tmpl = state.subjects.find(s => s.subject === assign.subject && (cls ? s.grade === cls.grade : true));
+            const isHomeroomMain = Boolean(tmpl && tmpl.isHomeroomMain);
+            const isClassHomeroom = cls && (teacher.targetClassId === cls.id || teacher.id === cls.homeroomTeacherId);
+            const isSpecMatch = (teacher.specialties || []).includes(assign.subject);
+
+            let typeBadge = '<span class="badge bg-secondary">一般科目</span>';
+            if (isHomeroomMain && isClassHomeroom) {
+              typeBadge = '<span class="badge bg-success">導師主科</span>';
+            } else if (isSpecMatch) {
+              typeBadge = '<span class="badge bg-success">⭐ 專長相符</span>';
+            }
+
+            const roomText = assign.requiresRoom 
+              ? `<span class="badge bg-info">${(state.rooms || SPECIAL_ROOMS)[assign.requiresRoom]?.name || assign.requiresRoom}</span>`
+              : '-';
+
+            return `
+              <tr>
+                <td><strong>${cls ? cls.name : assign.classId}</strong></td>
+                <td><span class="badge bg-secondary">${assign.subject}</span></td>
+                <td style="text-align:center;"><strong>${assign.weeklyHours}</strong> 節</td>
+                <td>${roomText}</td>
+                <td>${typeBadge}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  const summaryStr = formatTeacherAssignmentSummary(teacher);
+
+  body.innerHTML = `
+    <div class="glass-card p-3 mb-3 flex-justify-between align-items-center" style="background: rgba(255,255,255,0.03);">
+      <div>
+        <div class="flex align-items-center gap-2">
+          <strong style="font-size: 1.1rem;">${teacher.name} (${teacher.id})</strong>
+          <span class="badge bg-secondary">${roleLabels[teacher.role] || teacher.role}</span>
+          ${teacher.targetClassId ? `<span class="badge bg-info">${teacher.targetClassId} 導師</span>` : ''}
+        </div>
+        <div class="text-secondary style-italic mt-1" style="font-size: 13px;">
+          專長科目：${(teacher.specialties || []).join('; ') || '無'}
+        </div>
+      </div>
+      <div>${statusBadge}</div>
+    </div>
+
+    <div class="p-3 mb-3 rounded-lg" style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2); font-size: 0.9rem;">
+      <span class="text-secondary style-italic block mb-1" style="font-size:11px;">配課摘要清單（簡明文字）：</span>
+      <span class="text-light font-bold" style="letter-spacing: 0.3px;">${summaryStr}</span>
+    </div>
+
+    <h4><i data-lucide="book-open" class="icon-small text-primary mr-1"></i> 已指派班級與課程明細 (共 ${teacherAssignments.length} 門，${teacher.assignedHours} 節)：</h4>
+    ${tableHtml}
+  `;
+
+  modal.classList.add("open");
+  safeCreateIcons();
+}
+

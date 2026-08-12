@@ -21,10 +21,106 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
   logCallback(`[Engine] 待排課節數: ${validAssignments.reduce((sum, a) => sum + a.weeklyHours, 0)} 節 (排除未指派教師之科目)`);
   logCallback(`[Engine] 最大回溯次數限制: ${maxBacktracks}`);
   
+  // Pre-calculate teacher and class maps for fast lookup (moved ahead of
+  // token generation below since the forced-double-split rule needs grade
+  // lookups for high-grade English).
+  const teacherMap = new Map();
+  teachers.forEach(t => teacherMap.set(t.id, t));
+
+  const classMap = new Map();
+  classes.forEach(c => classMap.set(c.id, c));
+
+  // Subjects requiring mandated consecutive scheduling ("連排"):
+  // - 自然/社會 (any grade), exactly 3x/week: 2 periods back-to-back + the
+  //   3rd on a different day (so no day ever has all 3).
+  // - High-grade (5-6) English-family subjects (英文/英語/彈(英) - all
+  //   fundamentally English instruction, per user clarification): exactly
+  //   2x/week -> both periods back-to-back; exactly 3x/week -> same
+  //   double+single pattern as 自然/社會.
+  // Skipped for assignments the user has manually locked to a slot - an
+  // explicit lock takes precedence over these patterns.
+  const FORCED_DOUBLE_SUBJECTS = ["自然", "社會"];
+  const FORCED_CONNECT_HIGH_GRADE_ENGLISH_SUBJECTS = ["英語", "英文", "彈(英)"];
+
+  function getForcedConnectPattern(assign) {
+    if (assign.lockedSlot) return null;
+
+    const isCoreSubject = FORCED_DOUBLE_SUBJECTS.includes(assign.subject);
+    let isHighGradeEnglish = false;
+    if (!isCoreSubject && FORCED_CONNECT_HIGH_GRADE_ENGLISH_SUBJECTS.includes(assign.subject)) {
+      const cls = classMap.get(assign.classId);
+      isHighGradeEnglish = Boolean(cls && cls.grade >= 5);
+    }
+    if (!isCoreSubject && !isHighGradeEnglish) return null;
+
+    if (assign.weeklyHours === 3) return 'double-single';
+    if (isHighGradeEnglish && assign.weeklyHours === 2) return 'full-double';
+    return null;
+  }
+
   // 1. Convert weekly CourseAssignments into a list of individual Lesson tokens
+  // An assignment with a `lockedSlot` (day/period) has its first lesson token
+  // pinned to that fixed slot - used e.g. for split-class local-language
+  // courses that must run at the identical time across a whole grade.
   const lessons = [];
   validAssignments.forEach(assign => {
+    const connectPattern = getForcedConnectPattern(assign);
+
+    if (connectPattern === 'double-single') {
+      // One 2-period consecutive block + one standalone period. `groupRole`
+      // marks them as a pair whose standalone member must land on a
+      // different day than the block (enforced in isValid's Constraint 8).
+      lessons.push({
+        id: `${assign.classId}-${assign.subject}-${assign.teacherId}-double`,
+        classId: assign.classId,
+        subject: assign.subject,
+        teacherId: assign.teacherId,
+        requiresRoom: assign.requiresRoom || null,
+        assignmentId: assign.id,
+        lessonIndex: 0,
+        weeklyHours: assign.weeklyHours,
+        groupRole: 'double',
+        locked: false, lockedDay: null, lockedPeriod: null
+      });
+      lessons.push({
+        id: `${assign.classId}-${assign.subject}-${assign.teacherId}-single`,
+        classId: assign.classId,
+        subject: assign.subject,
+        teacherId: assign.teacherId,
+        requiresRoom: assign.requiresRoom || null,
+        assignmentId: assign.id,
+        lessonIndex: 1,
+        weeklyHours: assign.weeklyHours,
+        groupRole: 'single',
+        locked: false, lockedDay: null, lockedPeriod: null
+      });
+      return;
+    }
+
+    if (connectPattern === 'full-double') {
+      // Both periods must be consecutive - a single block, no leftover
+      // single period. Reuses the same double-block placement machinery;
+      // with no sibling token sharing this assignmentId, Constraint 8 in
+      // isValid() is simply a no-op for it.
+      lessons.push({
+        id: `${assign.classId}-${assign.subject}-${assign.teacherId}-fulldouble`,
+        classId: assign.classId,
+        subject: assign.subject,
+        teacherId: assign.teacherId,
+        requiresRoom: assign.requiresRoom || null,
+        assignmentId: assign.id,
+        lessonIndex: 0,
+        weeklyHours: assign.weeklyHours,
+        groupRole: 'double',
+        locked: false, lockedDay: null, lockedPeriod: null
+      });
+      return;
+    }
+
     for (let i = 0; i < assign.weeklyHours; i++) {
+      const isLocked = i === 0 && assign.lockedSlot &&
+        Number.isInteger(assign.lockedSlot.day) && Number.isInteger(assign.lockedSlot.period);
+
       lessons.push({
         id: `${assign.classId}-${assign.subject}-${assign.teacherId}-${i}`,
         classId: assign.classId,
@@ -33,17 +129,14 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
         requiresRoom: assign.requiresRoom || null,
         assignmentId: assign.id,
         lessonIndex: i, // 0-indexed index of the lesson in this assignment
-        weeklyHours: assign.weeklyHours
+        weeklyHours: assign.weeklyHours,
+        groupRole: null,
+        locked: Boolean(isLocked),
+        lockedDay: isLocked ? assign.lockedSlot.day : null,
+        lockedPeriod: isLocked ? assign.lockedSlot.period : null
       });
     }
   });
-
-  // 2. Pre-calculate teacher and class maps for fast lookup
-  const teacherMap = new Map();
-  teachers.forEach(t => teacherMap.set(t.id, t));
-  
-  const classMap = new Map();
-  classes.forEach(c => classMap.set(c.id, c));
 
   // 3. Initialize scheduling matrices
   // Structure: classSchedule[classId][day][period] -> Lesson
@@ -92,9 +185,47 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
     if (l.requiresRoom) initRoom(l.requiresRoom);
   });
 
+  // 3b. Pre-place user-locked lessons at their fixed slots before the solver
+  // runs (e.g. split-class local-language courses that must run at the
+  // identical day/period across an entire grade). `isValid` below is a
+  // hoisted function declaration, so it's safe to call here.
+  const lockedLessons = lessons.filter(l => l.locked);
+  const freeLessons = lessons.filter(l => !l.locked);
+
+  if (lockedLessons.length > 0) {
+    logCallback(`[Engine] 發現 ${lockedLessons.length} 堂已鎖定固定時段的課程，優先鎖入課表...`);
+  }
+
+  let lockConflict = null;
+  for (const l of lockedLessons) {
+    if (isValid(l, l.lockedDay, l.lockedPeriod)) {
+      classSchedule[l.classId][l.lockedDay][l.lockedPeriod] = l;
+      teacherSchedule[l.teacherId][l.lockedDay][l.lockedPeriod] = l.classId;
+      if (l.requiresRoom) {
+        initRoom(l.requiresRoom);
+        roomUsage[l.requiresRoom][l.lockedDay][l.lockedPeriod]++;
+      }
+    } else {
+      lockConflict = l;
+      break;
+    }
+  }
+
+  if (lockConflict) {
+    const lt = teacherMap.get(lockConflict.teacherId);
+    logCallback(`[Engine] ❌ 鎖定課程衝突：班級 ${lockConflict.classId}、科目「${lockConflict.subject}」（教師：${lt ? lt.name : lockConflict.teacherId}）無法鎖定於週${lockConflict.lockedDay} 第${lockConflict.lockedPeriod} 節。`);
+    logCallback(`[Engine] 可能原因：該年級此時段不可排課（半天/放學）、教師忙碌或已在其他班級授課、時段已被佔用、專科教室已達使用上限，或同科目當日已排滿 2 堂。`);
+    logCallback(`[Engine] 💡 提示：請前往「配課」頁面調整此課程的鎖定時段設定後再重新排課。`);
+    return null;
+  }
+
+  if (lockedLessons.length > 0) {
+    logCallback(`[Engine] ✅ 已成功鎖定 ${lockedLessons.length} 堂課程於固定時段。`);
+  }
+
   // 4. Sort variables (lessons) based on heuristics (MRV & constraint weight)
   // We want to schedule the hardest lessons first to avoid backtracking late.
-  lessons.forEach(lesson => {
+  freeLessons.forEach(lesson => {
     const t = teacherMap.get(lesson.teacherId);
     const c = classMap.get(lesson.classId);
     let difficulty = 0;
@@ -136,10 +267,10 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
   });
 
   // Sort descending by difficulty
-  lessons.sort((a, b) => b.difficulty - a.difficulty);
+  freeLessons.sort((a, b) => b.difficulty - a.difficulty);
 
   logCallback(`[Engine] 排序完成。最難排的前 5 門課：`);
-  lessons.slice(0, 5).forEach((l, i) => {
+  freeLessons.slice(0, 5).forEach((l, i) => {
     logCallback(`  ${i+1}. 班級 ${l.classId} - 科目 ${l.subject} - 教師 ${teacherMap.get(l.teacherId)?.name} (難度得分: ${l.difficulty.toFixed(0)})`);
   });
 
@@ -199,6 +330,27 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
   }
 
   /**
+   * How many periods a teacher could possibly teach on a given day, based on
+   * their homeroom class's half-day/full-day pattern (falls back to a full
+   * 7-period day for teachers with no homeroom class). Used to gauge how
+   * many free periods a homeroom teacher would have left on a given day.
+   */
+  function getTeacherDailyCapacity(teacherId, day) {
+    const t = teacherMap.get(teacherId);
+    if (t && t.targetClassId) {
+      const cls = classMap.get(t.targetClassId);
+      if (cls) {
+        let cap = 0;
+        for (let p = 1; p <= 7; p++) {
+          if (isSlotAllowedForClass(cls.id, day, p)) cap++;
+        }
+        return cap;
+      }
+    }
+    return 7;
+  }
+
+  /**
    * Check if assigning a lesson to (day, period) satisfies all hard constraints.
    */
   function isValid(lesson, day, period) {
@@ -248,7 +400,62 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
       }
     }
 
+    // Constraint 8: Forced-double subjects (e.g. 自然/社會 at 3 periods/week,
+    // split into a double-block + a standalone period) - the standalone
+    // period must not land on the same day as its double-block sibling, and
+    // vice versa. Order-independent: whichever of the pair is placed second
+    // sees the first already committed and gets rejected if they'd collide.
+    if (lesson.groupRole) {
+      for (let p = 1; p <= 7; p++) {
+        const scheduled = classSchedule[classId][day][p];
+        if (scheduled && scheduled.assignmentId === lesson.assignmentId && scheduled.id !== lesson.id) {
+          return false;
+        }
+      }
+    }
+
     return true;
+  }
+
+  /**
+   * Check both periods of a 2-period consecutive block for a forced-double
+   * subject (e.g. 自然/社會). `startPeriod` and `startPeriod+1` must both be
+   * free/valid; the pair spanning the lunch break (period 4→5) is excluded
+   * by the caller since those two periods aren't actually back-to-back.
+   */
+  function isValidDoubleBlock(lesson, day, startPeriod) {
+    if (!isValid(lesson, day, startPeriod)) return false;
+    if (!isValid(lesson, day, startPeriod + 1)) return false;
+    return true;
+  }
+
+  /**
+   * Sort candidate (day, startPeriod) slots for a forced-double-block lesson.
+   */
+  function getSortedDoubleBlockSlots(lesson) {
+    const candidates = [];
+    const validStartPeriods = [1, 2, 3, 5, 6]; // 4→5 excluded: lunch break in between
+
+    for (let day = 1; day <= 5; day++) {
+      for (const startPeriod of validStartPeriods) {
+        if (isValidDoubleBlock(lesson, day, startPeriod)) {
+          candidates.push({ day, period: startPeriod, score: 0 });
+        }
+      }
+    }
+
+    // Light heuristic: avoid piling onto a day where this teacher is already heavily loaded.
+    candidates.forEach(cand => {
+      let score = 0;
+      let teacherLoadOnDay = 0;
+      for (let p = 1; p <= 7; p++) {
+        if (teacherSchedule[lesson.teacherId][cand.day][p] !== null) teacherLoadOnDay++;
+      }
+      if (teacherLoadOnDay >= 4) score -= 20;
+      cand.score = score;
+    });
+
+    return candidates.sort((a, b) => b.score - a.score);
   }
 
   /**
@@ -322,7 +529,7 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
 
       let isConsecutiveSubject = ["社會", "美勞", "自然", "電腦", "音樂", "藝(音)", "藝(美)", "彈(資)", "科技"].includes(lesson.subject);
       const cls = classMap.get(lesson.classId);
-      if (cls && cls.grade >= 5 && lesson.subject === "英文") {
+      if (cls && cls.grade >= 5 && FORCED_CONNECT_HIGH_GRADE_ENGLISH_SUBJECTS.includes(lesson.subject)) {
         isConsecutiveSubject = true;
       }
 
@@ -360,6 +567,45 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
         score -= 20;
       }
 
+      // H5: Homeroom teachers should keep at least 2-3 free periods each day
+      if (t && t.role === 'homeroom') {
+        const dailyCapacity = getTeacherDailyCapacity(lesson.teacherId, day);
+        const freeAfterPlacing = dailyCapacity - (teacherLoadOnDay + 1);
+        if (freeAfterPlacing < 2) {
+          score -= (2 - freeAfterPlacing) * 45; // Increasingly penalize squeezing below 2 free periods
+        } else if (freeAfterPlacing >= 3) {
+          score += 15; // Reward leaving a comfortable 3+ free periods
+        }
+      }
+
+      // H6: Directors / section leaders should teach in one continuous half-day block
+      if (t && (t.role === 'director' || t.role === 'leader')) {
+        let morningCount = 0;
+        let afternoonCount = 0;
+        for (let p = 1; p <= 4; p++) {
+          if (teacherSchedule[lesson.teacherId][day][p] !== null) morningCount++;
+        }
+        for (let p = 5; p <= 7; p++) {
+          if (teacherSchedule[lesson.teacherId][day][p] !== null) afternoonCount++;
+        }
+
+        const isMorningSlot = period <= 4;
+        if (morningCount > 0 && afternoonCount === 0) {
+          score += isMorningSlot ? 60 : -60; // Already committed to morning: stay there
+        } else if (afternoonCount > 0 && morningCount === 0) {
+          score += isMorningSlot ? -60 : 60; // Already committed to afternoon: stay there
+        }
+
+        // Bonus for landing right next to an already-scheduled period (tight block)
+        let adjacentToExisting = false;
+        for (let p = 1; p <= 7; p++) {
+          if (p !== period && teacherSchedule[lesson.teacherId][day][p] !== null && Math.abs(p - period) === 1) {
+            adjacentToExisting = true;
+          }
+        }
+        if (adjacentToExisting) score += 25;
+      }
+
       cand.score = score;
     });
 
@@ -378,26 +624,38 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
     }
 
     // Success condition: all lessons scheduled
-    if (lessonIndex === lessons.length) {
+    if (lessonIndex === freeLessons.length) {
       return true;
     }
 
-    const lesson = lessons[lessonIndex];
-    const candidateSlots = getSortedSlotsForLesson(lesson);
-    const minSlotVal = (lesson.lessonIndex > 0 && lastSlotMap[lesson.assignmentId]) ? lastSlotMap[lesson.assignmentId] : 0;
+    const lesson = freeLessons[lessonIndex];
+    const isDouble = lesson.groupRole === 'double';
+    const candidateSlots = isDouble ? getSortedDoubleBlockSlots(lesson) : getSortedSlotsForLesson(lesson);
+    // Symmetry breaking only applies to truly-interchangeable tokens of a
+    // plain multi-period assignment - grouped (double/single) tokens are
+    // structurally different from each other, so it's skipped for them.
+    const minSlotVal = (!lesson.groupRole && lesson.lessonIndex > 0 && lastSlotMap[lesson.assignmentId]) ? lastSlotMap[lesson.assignmentId] : 0;
 
     for (let i = 0; i < candidateSlots.length; i++) {
       const { day, period } = candidateSlots[i];
       const slotVal = day * 10 + period;
       if (slotVal <= minSlotVal) continue; // Symmetry Breaking for identical tokens of same assignment
 
-      if (isValid(lesson, day, period)) {
+      const valid = isDouble ? isValidDoubleBlock(lesson, day, period) : isValid(lesson, day, period);
+      if (valid) {
         // Apply assignment
         classSchedule[lesson.classId][day][period] = lesson;
         teacherSchedule[lesson.teacherId][day][period] = lesson.classId;
         if (lesson.requiresRoom) {
           initRoom(lesson.requiresRoom);
           roomUsage[lesson.requiresRoom][day][period]++;
+        }
+        if (isDouble) {
+          classSchedule[lesson.classId][day][period + 1] = lesson;
+          teacherSchedule[lesson.teacherId][day][period + 1] = lesson.classId;
+          if (lesson.requiresRoom) {
+            roomUsage[lesson.requiresRoom][day][period + 1]++;
+          }
         }
 
         const prevSlotVal = lastSlotMap[lesson.assignmentId];
@@ -418,6 +676,13 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
         if (lesson.requiresRoom) {
           initRoom(lesson.requiresRoom);
           roomUsage[lesson.requiresRoom][day][period]--;
+        }
+        if (isDouble) {
+          classSchedule[lesson.classId][day][period + 1] = null;
+          teacherSchedule[lesson.teacherId][day][period + 1] = null;
+          if (lesson.requiresRoom) {
+            roomUsage[lesson.requiresRoom][day][period + 1]--;
+          }
         }
         lastSlotMap[lesson.assignmentId] = prevSlotVal;
       }
@@ -449,7 +714,8 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
               finalSchedule[c.id][`${day}-${period}`] = {
                 subject: lesson.subject,
                 teacherId: lesson.teacherId,
-                requiresRoom: lesson.requiresRoom
+                requiresRoom: lesson.requiresRoom,
+                locked: Boolean(lesson.locked)
               };
             }
           }
@@ -488,6 +754,16 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
  */
 export function validateManualMove(schedule, teachers, classId, fromDay, fromPeriod, toDay, toPeriod, lesson, logCallback = console.log, customRooms = null) {
   const roomsMap = customRooms || SPECIAL_ROOMS;
+
+  // 0. Locked lessons are pinned - can't be dragged away, and nothing can be
+  // dropped on top of them.
+  if (lesson.locked) {
+    return { valid: false, reason: "此課程已鎖定固定時段，無法搬動" };
+  }
+  const targetCellForLock = schedule[classId]?.[`${toDay}-${toPeriod}`];
+  if (targetCellForLock && targetCellForLock.locked) {
+    return { valid: false, reason: "目標時段的課程已鎖定，無法覆蓋" };
+  }
 
   // 1. Check class level constraints (afternoon limits)
   // Determine grade

@@ -1,3 +1,307 @@
+## [2026-08-12 16:35:00] - 修正高年級英語連排規則：涵蓋「英文」2堂與「彈(英)」，週2堂時強制整堂連排
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 5、6年級課程中有英文2堂以及彈(英)，這兩種課程本質上就是英文（英語）課程
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   使用者澄清 5、6 年級實際配課中「英文」為每週 2 堂、另有獨立的「彈(英)」課程，兩者本質上都是英語教學，前次僅處理「每週 3 堂」情境不足以涵蓋此情形，且原本科目命名清單未包含「彈(英)」。
+    *   將 `scheduler.js` 的判斷邏輯重構為 `getForcedConnectPattern(assign)`，回傳三種結果：`'double-single'`（自然/社會，或高年級英語家族週 3 堂 → 兩堂連排＋一堂異日）、`'full-double'`（高年級英語家族週 2 堂 → 兩堂皆須相鄰連排，不留單堂）、或 `null`（不套用硬性規則）。
+    *   科目命名清單更新為 `FORCED_CONNECT_HIGH_GRADE_ENGLISH_SUBJECTS = ["英語", "英文", "彈(英)"]`，僅限 5、6 年級套用；`weeklyHours===2` 時只產生單一個「雙堂連排」token（不搭配獨立單堂），直接沿用既有的雙堂原子佔用/回溯機制（`isValidDoubleBlock`／`getSortedDoubleBlockSlots`），因無同 `assignmentId` 的手足 token，`isValid()` 第 8 項的「不可與手足同一天」檢查自然形同無作用，不需額外分支。
+    *   同步將原本僅列出「英文」的軟性連排偏好清單（`getSortedSlotsForLesson` 內的 `isConsecutiveSubject` 判斷）改為引用同一份 `FORCED_CONNECT_HIGH_GRADE_ENGLISH_SUBJECTS`，讓「彈(英)」與「英語」在節數不落在 2、3 堂等特殊情況時，仍保有原本「盡量連排」的軟性偏好。
+    *   已於本機以 Node 腳本模擬 5 年級「英文」(2堂) 與「彈(英)」(2堂) 情境驗證：兩科目各自恆為相鄰兩節連排、彼此不落在同一天（沿用既有 Constraint 7 同日互斥規則）。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `scheduler.js`: 以 `getForcedConnectPattern()` 取代 `needsForcedDoubleSplit()`，新增 `'full-double'` 情境與對應 token 產生邏輯，並更新科目命名清單涵蓋「彈(英)」。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次規則修正歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 16:25:00] - 高年級英語課程比照自然/社會，週三堂時也強制「兩堂連排＋一堂異日」
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 高年級的英語課程也要連排
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   延伸前次為「自然／社會」建立的雙堂連排硬性規則機制，將 `scheduler.js` 的 `needsForcedDoubleSplit()` 擴充為同時涵蓋「高年級（5、6年級）英語課程且每週節數恰為 3」的情境。由於原有程式碼中「英語」與「英文」兩種科目命名並存（`英語` 用於晨間主科偏好與 CSV 範本；`英文` 則殘留於舊有的同日衝突/軟性連排判斷中，實際上從未真正比對到），為避免使用者資料採用任一種命名皆能生效，改以 `["英語","英文"]` 雙名單同時比對。
+    *   由於此判斷需要查詢班級年級，將原本排在 token 產生流程「之後」才建立的 `teacherMap` / `classMap` 提前至最前面建立（純屬搬移既有程式碼順序，無其他副作用），供 `needsForcedDoubleSplit()` 於 token 產生階段查詢班級年級使用。
+    *   低年級／中年級（1-4 年級）之英語課程不受影響，僅維持原有軟性排課偏好；若該英語配課已被使用者手動鎖定時段，亦比照自然/社會的規則優先尊重鎖定設定。
+    *   已於本機以 Node 腳本模擬 5 年級與 3 年級英語課程情境驗證：5 年級英語恆為「兩堂相鄰連排＋一堂異日」，3 年級英語不受此硬性規則限制。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `scheduler.js`: 調整 `teacherMap`/`classMap` 建立順序、擴充 `needsForcedDoubleSplit()` 涵蓋高年級英語（英語／英文雙命名相容）。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次高年級英語連排規則開發歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 16:10:00] - 新增班級／科目編輯功能，並修復「新增專科教室」無作用的 Modal 巢狀錯誤
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 增加修改已經匯入的科目、班級功能，另外新增專科教室的功能無作用
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   **診斷「新增專科教室」無作用**：派出子代理程式排查後發現根因為 `index.html` 中 `#modal-subject-import-confirm` 少了一個結尾 `&lt;/div&gt;`，導致其後的 `#modal-room`（專科教室 Modal）與 `#modal-teacher-assignment-detail`（教師配課明細 Modal）在 DOM 結構上被誤巢狀包在這個永遠不會加上 `.open` 樣式的 Modal 內部。由於祖先層 `display: none`，即使 `openRoomModal()` 的 JS 邏輯正確執行並替 `#modal-room` 加上 `.open`，畫面仍完全不會顯示，讓使用者誤以為「新增」按鈕無作用。已補上遺漏的 `&lt;/div&gt;`，修復後以程式驗證三個 Modal 皆已回復為頂層獨立節點，不再互相巢狀。此修復同時連帶修復了先前對話中新增的「教師配課明細」Modal 顯示異常。
+    *   **新增班級編輯功能**：`#modal-class` 新增隱藏欄位 `class-form-action` / `class-old-id`（比照既有教師/教室 Modal 的慣例），`openClassModal(classId)` 可傳入班級 ID 進入編輯模式並預填班級名稱與年級；為避免波及既有配課、排課與教師導師班級等外鍵關聯，編輯模式下「班級 ID」欄位鎖定唯讀、不可更改。`handleClassFormSubmit()` 新增編輯分支：更新班級名稱／年級後，若年級有變更，會自動同步比對新年級的科目樣板，移除不再適用（舊年級專屬）科目之配課紀錄，並為新年級新增的科目建立空白待配課紀錄。班級管理卡片新增「編輯」按鈕（`renderClassesAndRooms()`）。
+    *   **新增科目編輯功能**：`#modal-subject` 同樣新增 `subject-form-action` / `subject-old-id` 隱藏欄位，`openSubjectModal(subjectId)` 可預填年級、科目名稱、每週節數、專科教室與導師主科屬性進入編輯模式。修復原本 `handleSubjectFormSubmit()` 僅依「年級-名稱」複合鍵做 upsert 的瑕疵（重新命名科目時會產生一筆新資料、留下舊資料與其配課紀錄成為孤兒）：編輯分支改為鎖定原始科目物件並直接更新其欄位；若年級未變更，會同步將全校該年級各班級對應的配課紀錄一併改名／更新節數與教室；若年級變更，則移除舊年級各班級的相關配課紀錄，並為新年級各班級建立對應的空白待配課紀錄。科目列表新增「編輯」按鈕（`renderSubjects()`）。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 修復 `#modal-subject-import-confirm` 缺少的結尾 `&lt;/div&gt;`；`#modal-class`／`#modal-subject` 新增編輯模式所需隱藏欄位與標題 ID。
+    *   `[MODIFIED]` `app.js`: `openClassModal()`／`handleClassFormSubmit()`、`openSubjectModal()`／`handleSubjectFormSubmit()` 新增編輯分支與配課資料同步邏輯；`renderClassesAndRooms()`／`renderSubjects()` 新增「編輯」按鈕與事件綁定。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次 Modal 錯誤修復與班級/科目編輯功能開發歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 15:50:00] - 自然／社會週三堂課強制「兩堂連排＋一堂異日」硬性排課規則
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 自然與社會科目一個星期有三堂，嚴格規定其中兩堂必須連排，並且不得一天有三堂課
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   使用者明確要求「嚴格規定」，故以硬性約束（而非原本僅供參考的軟性評分偏好）實作：在 `scheduler.js` 新增 `needsForcedDoubleSplit(assign)`，判斷科目為「自然」或「社會」且每週節數恰為 3、且該配課未被使用者手動鎖定時段時，將原本的 3 個獨立單堂課程 token 改為產生 1 個「雙堂連排區塊 (`groupRole: 'double'`)」+ 1 個「獨立單堂 (`groupRole: 'single'`)」token，兩者共用同一 `assignmentId` 以利互相辨識。
+    *   新增 `isValid()` 的第 8 項硬性約束：只要課程帶有 `groupRole`，其所屬班級課表中若已有「相同 `assignmentId` 但不同 token」的課程，則不可排在同一天 —— 確保連排區塊與獨立單堂必落於不同日期，無論兩者排課順序何者先決定皆成立（對稱式互相檢查，不受回溯搜尋順序影響）。
+    *   新增 `isValidDoubleBlock()` 與 `getSortedDoubleBlockSlots()`：僅允許以節次 1、2、3、5、6 為起點的相鄰兩節（排除第 4→5 節，因中間為午休非真正連堂），並沿用既有 `isValid()` 逐節檢查教師/班級/教室等所有硬性規則。
+    *   修改回溯主流程 `solve()`：偵測 `groupRole==='double'` 的 token 時，一次性「原子」佔用並回溯兩個相鄰節次（含教師課表與專科教室用量），避免只成功排入一半就進入下一層遞迴；同時針對已分組（`groupRole` 非空）的 token 停用原本用於相同科目多堂課的「對稱破壞」排序限制（因雙堂區塊與獨立單堂並非可互換的同質 token，強制遞增時段值會誤傷合法解）。
+    *   若該配課已被使用者透過「鎖定時段」功能手動指定，則完全略過本次新規則，維持原本鎖定行為優先。
+    *   已於本機以 Node 腳本模擬多班級／多年級情境驗證：連排恆為相鄰兩節、獨立單堂恆落於不同日、任何一天皆不會出現 3 堂同科目課程，且鎖定情境不受影響。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `scheduler.js`: 新增 `needsForcedDoubleSplit()`、雙堂/單堂 token 產生邏輯、`isValid()` 第 8 項硬性約束、`isValidDoubleBlock()`、`getSortedDoubleBlockSlots()`，並調整 `solve()` 以原子方式處理雙堂區塊之佔用/回溯與對稱破壞邏輯。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次排課硬性規則開發歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 15:35:00] - 課表課程顏色邏輯改為「導師課＝淡藍色、非導師課＝淡綠色」
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 課表中課程呈現的顏色更改成以下的邏輯：
+    > 所有導師的課，一律顯示為淡藍色、非導師的課程顯示為淡綠色
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   取代原本「每位教師一色」的 8 色分類色票配色機制，改為依授課教師身分（`teacher.role`）二分呈現：`role === 'homeroom'`（導師）一律套用淡藍色，其餘職務（科任、主任、組長、鐘點）一律套用淡綠色。
+    *   簡化 `app.js` 的 `getTeacherColorClass(teacherId)`：直接查找教師身分並回傳 `role-homeroom` 或 `role-other` 樣式類別，取代原本依教師 ID 排序分配色票索引的邏輯。
+    *   `style.css` 移除 `--teacher-color-1` ~ `--teacher-color-8` 明暗主題色票變數與對應的 8 條 `.timetable-card.teacher-color-N` 規則，改為兩條規則並重用既有的 `--info-color`/`--info-bg`（淡藍）與 `--success-color`/`--success-bg`（淡綠）語意色彩變數，維持與全站配色語言一致，且明暗主題皆已定義完整。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `app.js`: 簡化 `getTeacherColorClass()` 為依教師職務二分配色。
+    *   `[MODIFIED]` `style.css`: 移除 8 色分類色票變數與規則，新增 `.timetable-card.role-homeroom` / `.timetable-card.role-other` 兩條規則。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次課表配色邏輯調整歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 15:25:00] - 自動排課引擎新增「導師空堂」「主管連續半天」排課偏好，並新增課程直接鎖定功能
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 自動排課的規則增加：
+    > 導師每天至少要有2-3節空堂，主任、組長的課程儘量以整個上午或整個下午連續安排
+    > 另外增加直接鎖定課程的功能，因為本土課程實施時，會有同年級拆班的狀況，必須同年級再同一個時段
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在 `scheduler.js` 的 `getSortedSlotsForLesson()` 軟性評分機制中新增兩項啟發式規則：
+        1. **H5 導師空堂偏好**：新增 `getTeacherDailyCapacity()` 依導師所帶班級年級之半天/全天課表型態計算當日可授課上限，若排課後當日剩餘空堂低於 2 節則依差距倍增扣分，達 3 節以上則加分鼓勵。
+        2. **H6 主任/組長連續半天偏好**：偵測當日已排課節次落在上午 (1-4節) 或下午 (5-7節) 何者，強烈鼓勵新課節維持同一半天區塊，並額外對緊鄰已排課節次的候選時段加分，鼓勵形成連續區塊。
+    *   新增「直接鎖定課程」機制：於 `assignment` 物件新增可選欄位 `lockedSlot: {day, period}`。
+    *   `runScheduler()` 於一般回溯排課前，先行將所有已鎖定課程依既有 `isValid()` 硬性規則預先卡入課表（步驟 3b），若鎖定時段本身衝突則立即中止排課並於 LOG 輸出明確衝突原因與班級/科目/教師資訊；其餘課程 (`freeLessons`) 才進入正常回溯搜尋。
+    *   最終課表輸出與 `validateManualMove()` 皆會標記/檢查 `locked` 旗標，鎖定課程無法透過手動拖曳調課搬動，也無法被其他課程覆蓋。
+    *   `index.html` / `app.js` 新增「班級配課矩陣」單筆鎖定欄位（需先指派教師），以及「同年級課程鎖定工具」批次功能：選擇年級、科目、星期、節次後一鍵將該年級所有班級之同科目配課鎖定於同一時段，對應本土語言依語別拆班、需同年級各班同時上課之需求。
+    *   `style.css` 新增鎖定課程卡片樣式（虛線外框、鎖頭圖示），並排除鎖定儲存格作為拖放目標。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `scheduler.js`: 新增 H5/H6 軟性排課偏好、`lockedSlot` 資料模型、鎖定課程預排與衝突檢查邏輯、`validateManualMove()` 鎖定保護。
+    *   `[MODIFIED]` `app.js`: 新增班級配課矩陣單筆鎖定/解鎖欄位、同年級課程鎖定工具（`populateGradeLockSubjects`、`applyGradeLock`、`clearGradeLock`）、課表檢視鎖定圖示與拖放保護。
+    *   `[MODIFIED]` `index.html`: 新增「鎖定時段」欄位與「同年級課程鎖定工具」面板。
+    *   `[MODIFIED]` `style.css`: 新增鎖定課程視覺樣式。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次排課規則與鎖定課程功能開發歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 15:05:00] - 移除「下課放學」鎖定時段視覺區塊，僅保留功能性排除
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 下課放學的區塊也要移除
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   將 `style.css` 中 `.timetable-table td.slot-locked` 的底色、斜紋背景、邊框色與文字樣式全數移除，僅保留 `pointer-events: none`，使該時段呈現為與一般儲存格無異的空白格，但仍不可作為拖放目標。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `style.css`: 簡化 `.slot-locked` 樣式規則，移除視覺色塊與斜紋。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次樣式簡化歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 14:58:00] - 一、二年級課表格式移除「下課放學」文字
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 一、二年級課表格式，不需要加入"下課放學"文字
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   移除 `app.js` 中合併儲存格與 `renderClassCell()` 內對放學時段填入「下課放學」文字的邏輯，改為留白，僅保留 `slot-locked` 樣式標示。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `app.js`: 移除放學時段合併儲存格與 `renderClassCell()` 中的「下課放學」文字輸出。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次調整歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 14:50:00] - 各年級課表下午整段放學時合併「下課放學」儲存格
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 各年級的課表顯示，只要下午不上課，三個下課放學應該要合併，只顯示一個下課放學文字
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在 `app.js` 新增 `isClassAfternoonLocked(cls, day)` 共用輔助函數，統一原本分散於 `renderClassCell()` 三處的年級放學規則判斷。
+    *   於 `renderTimetableGrid()` 主迴圈中，班級為中心檢視下，若當日第 5-7 節整段放學，於第 5 節儲存格套用 `rowSpan = 3` 並顯示「下課放學」，第 6、7 節則不再產生儲存格（由 rowspan 自動涵蓋），僅有原本課表上排課的星期二（低年級）等例外日維持三格獨立顯示。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `app.js`: 新增 `isClassAfternoonLocked()` 輔助函數、調整 `renderTimetableGrid()` 與 `renderClassCell()` 合併放學儲存格邏輯。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 14:40:00] - 課表檢視「以班級為中心」模式依授課教師套用不同顏色區分
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 課表檢視與微調中，以班級為中心的模式下，每一位老師的課都要以不同的顏色區分
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   依 dataviz 色彩設計方法，採用通過色盲安全驗證 (CVD ΔE ≥ 8、正常視覺 ΔE ≥ 15) 的 8 色分類色票，於 `style.css` 依明暗主題 (`[data-theme="dark"]` / `[data-theme="light"]`) 分別定義 `--teacher-color-1` ~ `--teacher-color-8` 並以 `color-mix()` 產生淡色底＋實色左邊框卡片樣式。
+    *   `app.js` 新增 `getTeacherColorClass(teacherId)`：依教師 ID 排序後以固定順序分配色票索引（超過 8 位教師則循環使用），確保同一教師無論篩選或重新渲染皆維持相同顏色；每張課程卡片仍固定顯示教師姓名文字，色彩僅作輔助視覺分組，非唯一辨識依據。
+    *   僅套用於「以班級為中心」檢視，教師/專科教室為中心模式不受影響。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `app.js`: 新增 `getTeacherColorClass()` 並套用於 `renderClassCell()` 課程卡片。
+    *   `[MODIFIED]` `style.css`: 新增教師分類色票 CSS 變數與 `.timetable-card.teacher-color-N` 樣式規則。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 14:30:00] - 教師配課明細總覽表格：配課明細合併為單欄、以逗號分隔
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 所有的配課明細合併在一欄內，每一個明細以逗號分開
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   `app.js` 的 `renderTeacherOverviewAssignments()` 表格渲染邏輯，將原本每筆配課各自獨立一欄 (`<td>`) 的呈現方式，改為單一欄位內以逗號串接所有配課明細文字 (如：`101健康(1), 301體育(2)`)，移除表頭 `colspan="99"` 改為單一固定欄位。
+    *   `exportTeacherOverviewExcel()` 同步調整，將原本動態展開的 `配課明細1`、`配課明細2`...多欄格式，改為單一「配課明細」欄位並以逗號合併輸出，維持匯出內容與畫面顯示一致。
+    *   `style.css` 移除配課明細儲存格的強制不換行設定，改為正常換行並設定最小寬度，避免長文字被過度壓縮。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `app.js`: 調整 `renderTeacherOverviewAssignments()` 與 `exportTeacherOverviewExcel()` 之配課明細輸出格式。
+    *   `[MODIFIED]` `style.css`: 調整 `.teacher-overview-detail-cell` 換行與寬度樣式。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 14:23:00] - 教師配課明細總覽：移除單筆複製按鈕，改為完整表格 Excel 匯出
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 全校教師配課明細總覽
+    > 老師的欄位中不需要有複製的按鈕，改為將表格匯出所有的記錄
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   `app.js` 的 `renderTeacherOverviewAssignments()` 移除教師姓名欄位內的單筆「複製」按鈕與對應事件綁定，改為點擊整列開啟教師個人配課明細 Modal。
+    *   重構 `exportTeacherOverviewExcel()`，由原本「每筆配課各自一列」的長格式，改為與畫面表格一致的「每位教師一列」寬格式，內含教師編號/姓名/職務/已配節數/基本節數/負擔狀態/帶班班級，並依最大配課數動態展開「配課明細1、配課明細2...」欄位，確保匯出內容涵蓋全校所有教師紀錄。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `app.js`: 移除單筆複製按鈕與事件、重構 `exportTeacherOverviewExcel()` 為寬格式全記錄匯出。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 14:15:00] - 「全校教師配課明細條列總覽」改為表格呈現（教師姓名／已配節數／配課明細分欄）
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 全校教師配課明細條列總覽要以表格方式呈現，第一欄為教師名稱、第二欄為已配節數、第三欄之後列出所有的配課細項，每一欄顯示一個班級的某一課程，例如101健康(1)
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   將 `index.html` 中原本以卡片清單呈現的 `teacher-overview-list-container` 改為可水平/垂直捲動的表格容器。
+    *   `app.js` 的 `renderTeacherOverviewAssignments()` 重寫為表格列渲染：第一欄教師姓名（含職務/導師徽章與複製按鈕）、第二欄已配節數／基本節數與負擔狀態徽章、第三欄起每一筆配課各自獨立一個儲存格（如 `101健康(1)`），表頭以 `colspan` 涵蓋不定欄數。
+    *   同時修復一項既有潛在錯誤：`formatTeacherAssignmentSummary()` 被 5 處程式碼呼叫卻從未實際定義，會導致執行時 ReferenceError；補上正式定義。
+    *   `style.css` 新增表格容器捲動樣式與固定表頭 (`sticky`)。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 將條列容器改為表格容器。
+    *   `[MODIFIED]` `app.js`: 重寫 `renderTeacherOverviewAssignments()` 為表格渲染，新增 `formatTeacherAssignmentSummary()` 定義。
+    *   `[MODIFIED]` `style.css`: 新增表格捲動與固定表頭樣式。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 14:07:15] - 重構「全校教師配課明細總覽」：移除圖表，專注於條列簡明配課摘要與職務/搜尋篩選
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 「全校教師配課明細總覽」功能，移除所有的圖表功能，只需要條列出教師所有授課班級與節數的串接摘要（例如：張主任：已配 3 節，101健康(1)、301體育(2)）
+    > 並且加上搜尋與職務篩選功能
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   移除 `index.html` 與 `app.js` 中所有 Chart.js 圖表容器、圖表繪製邏輯與圖表切換按鈕，簡化視圖結構。
+    *   將「全校教師配課明細總覽」介面調整為輕量純條列卡片/清單模式，每一條明確標示：`[教師姓名]：已配 [X] 節，[班級1][科目1]([節數1])、[班級2][科目2]([節數2])`。
+    *   保留並優化頂部「搜尋輸入框」 (可依姓名、班級、科目搜尋) 與「職務身分下拉選單」 (全部、班級導師、專任科任、兼任主任、兼任組長、鐘點兼任) 及「負擔狀態」篩選功能。
+    *   提供「一鍵複製全文」與「匯出 Excel」便捷工具按鈕。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 移除 Chart.js 引入與圖表 Canvas 區塊，簡化面板頂部選單與條列容器。
+    *   `[MODIFIED]` `app.js`: 移除 `updateOverviewCharts()` 與圖表相關事件，簡化 `renderTeacherOverviewAssignments()` 聚焦於簡明條列與篩選搜尋。
+    *   `[MODIFIED]` `style.css`: 調整條列清單卡片之字型、字距與複製區塊樣式。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次視圖簡化與重構歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 14:03:30] - 教師配課情形統一改為「姓名：已配X節，101健康(1)、301體育(2)」簡明文字格式
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 每位教師配課情形要依照這樣顯示：
+    > 姓名：已配X節，101健康(1)、301體育(2)
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   新增 `formatTeacherAssignmentSummary(t)` 通用輔助函數，精確依照使用者指定的格式串接教師名稱、已配總節數與授課班級科目細項（如：`張老師：已配3節，101健康(1)、301體育(2)`）。
+    *   在以下所有呈現教師配課情形的區塊全面導入此簡明格式：
+        1. **「全校教師配課明細總覽」教師卡片標頭與摘要列**：顯示整行純文字排版，方便一目了然複製或快速核對。
+        2. **「教師即時負擔」右側看板**：項目下方直接顯示該教師的簡明課程清單串接文字。
+        3. **「系統儀表板」教師負擔卡片**：顯示此精確格式之課程組合清單。
+        4. **單一教師配課明細 Modal 視窗**：標頭下方加上醒目的格式化摘要文字區塊。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `app.js`: 新增 `formatTeacherAssignmentSummary()`，並更新 `renderTeacherOverviewAssignments()`、`renderTeacherLoadsSidebar()`、`renderDashboardView()`、`openTeacherAssignmentDetailModal()`。
+    *   `[MODIFIED]` `style.css`: 調整配課摘要文字樣式與視覺行高。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次格式修正歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 13:59:00] - 全校教師配課明細總覽全方位視覺化圖表 (Chart.js 儀表板與配課結構比例條) 升級
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 全校教師配課明細總覽要以圖表方式呈現
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在 `index.html` 引入 Chart.js 視覺化圖表腳本庫。
+    *   在「全校教師配課明細總覽」面板中加入視覺化控制區塊，包含三大核心動態圖表：
+        1. **全校教師配課節數負擔比對長條圖 (Teacher Workload Bar Chart)**：視覺化呈現每位教師目前已配節數 vs 基本目標節數，超載/不足/達標以鮮明顏色區分。
+        2. **教師負擔狀態占比甜甜圈圖 (Workload Status Donut Chart)**：即時統計全校教師達標、超載、不足與鐘點之比例。
+        3. **科目領域與配課來源分布橫向長條圖 (Subject Distribution Bar Chart)**：分析全校各科目（國語、數學、自然、體育等）分配之總節數與授課師資比重。
+    *   在每位教師配課卡片內部導入**科目授課結構動態比例條 (Subject Ratio Stacked Bar)**，直觀呈現個別教師授課科目之占比。
+    *   提供「圖表/卡片雙視圖切換」 (Chart Only / Split View / Card Only) 切換按鈕，提升管理員操作與決策效率。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 引入 Chart.js，新增圖表容器區塊與視圖切換按鈕。
+    *   `[MODIFIED]` `app.js`: 新增 `initOverviewCharts()`、`updateOverviewCharts()`、`renderTeacherCourseRatioBar()` 圖表渲染與事件連動邏輯。
+    *   `[MODIFIED]` `style.css`: 新增圖表畫布容器、比重條與視圖切換器樣式。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次圖表視覺化功能開發歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-12 13:52:00] - 新增「全校教師配課明細總覽」與單一教師授課清單查看/匯出功能
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 增加列出每位老師的配課情形功能
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   在「線上互動配課」分頁中新增「全校教師配課明細總覽」第 4 種切換模式，並在 UI 上提供篩選（身分、配課負擔狀態、搜尋關鍵字）與全展開/摺疊功能。
+    *   針對每位教師生成獨立配課卡片，詳細列出該教師已指派之班級名稱、科目、每週節數、特殊教室需求與專長比對標記（⭐ 專長相符 / 導師主科 / 一般科目），並提供一鍵取消配課與直接新增配對快捷按鈕。
+    *   新增「匯出全校教師配課總覽 Excel」功能，整合 SheetJS 快速產出包含全校教師授課細項之試算表。
+    *   新增單一教師配課明細彈出視窗（Modal），並在系統儀表板、教師設定與右側負擔看板之教師項目添加點擊互動，方便隨時調閱與確認任何教師的配課細節。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 新增「全校教師配課明細總覽」模式按鈕、視圖容器、彈出視窗 UI。
+    *   `[MODIFIED]` `app.js`: 新增配課總覽渲染邏輯 `renderTeacherOverviewAssignments()`、Excel 匯出函數 `exportTeacherOverviewExcel()`、單一教師配課 Modal 顯示邏輯與相關點擊事件處理。
+    *   `[MODIFIED]` `style.css`: 新增教師配課明細卡片、表格、狀態標籤與彈窗相關 CSS 樣式。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次功能開發歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
 ## [2026-08-12 13:26:00] - [Self-Correction / Bugfix] 修復 Git 同步拒絕 (GitHub 巨型檔案限制問題)
 
 *   **使用者提示詞 / 需求 (User Prompt):**

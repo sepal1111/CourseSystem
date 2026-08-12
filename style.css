@@ -552,6 +552,35 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-light);
 }
 
+/* --- TEACHER OVERVIEW TABLE --- */
+.teacher-overview-table-wrapper {
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+}
+
+.teacher-overview-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+}
+
+.teacher-overview-table td,
+.teacher-overview-table th {
+  padding: 0.6rem 0.9rem;
+}
+
+.teacher-overview-row {
+  cursor: pointer;
+}
+
+.teacher-overview-detail-cell {
+  white-space: normal;
+  min-width: 260px;
+  line-height: 1.6;
+}
+
 /* Badges */
 .badge {
   display: inline-flex;
@@ -965,18 +994,9 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: 0.2rem;
 }
 
-/* Lower grade locked slots (no afternoon classes) */
+/* Lower grade locked slots (no afternoon classes) - left blank, not droppable */
 .timetable-table td.slot-locked {
-  background-color: rgba(239, 68, 68, 0.05);
-  background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(239, 68, 68, 0.05) 10px, rgba(239, 68, 68, 0.05) 20px);
   pointer-events: none;
-  border-color: rgba(239, 68, 68, 0.15);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--danger-color);
-  font-size: 0.8rem;
-  font-weight: 600;
 }
 
 /* Lunch row styling */
@@ -1007,6 +1027,10 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: space-between;
 }
 
+/* Course colorway by teacher role (class-centric view): homeroom teacher = light blue, others = light green */
+.timetable-card.role-homeroom { border-left-color: var(--info-color); background-color: var(--info-bg); }
+.timetable-card.role-other { border-left-color: var(--success-color); background-color: var(--success-bg); }
+
 .timetable-card:active {
   cursor: grabbing;
   transform: scale(0.96);
@@ -1015,6 +1039,21 @@ h1, h2, h3, h4, h5, h6 {
 
 .timetable-card.dragging {
   opacity: 0.4;
+}
+
+/* Pinned/locked lesson (e.g. same-grade split-class courses fixed to one slot) */
+.timetable-card.pinned {
+  cursor: not-allowed;
+  border-left-style: dashed;
+  outline: 1px dashed var(--warning-color);
+  outline-offset: -1px;
+}
+
+.timetable-card-lock-icon {
+  width: 12px;
+  height: 12px;
+  color: var(--warning-color);
+  float: right;
 }
 
 .timetable-card-subject {
@@ -1224,4 +1263,65 @@ h1, h2, h3, h4, h5, h6 {
   width: 1.1rem;
   height: 1.1rem;
   flex-shrink: 0;
+}
+
+/* Teacher Overview & Breakdown Styles */
+.teacher-overview-card {
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  transition: var(--transition-smooth);
+}
+
+.teacher-overview-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.teacher-overview-card .card-header:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.btn-xs {
+  padding: 2px 8px;
+  font-size: 12px;
+  border-radius: var(--border-radius-sm);
+}
+
+.badge.bg-success {
+  background-color: var(--success-bg);
+  color: var(--success-color);
+  border: 1px solid var(--success-color);
+}
+
+.badge.bg-warning {
+  background-color: var(--warning-bg);
+  color: var(--warning-color);
+  border: 1px solid var(--warning-color);
+}
+
+.badge.bg-danger {
+  background-color: var(--danger-bg);
+  color: var(--danger-color);
+  border: 1px solid var(--danger-color);
+}
+
+.badge.bg-info {
+  background-color: var(--info-bg);
+  color: var(--info-color);
+  border: 1px solid var(--info-color);
+}
+
+.badge.bg-secondary {
+  background-color: rgba(156, 163, 175, 0.15);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.teacher-load-item {
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.teacher-load-item:hover {
+  transform: translateX(4px);
+  background-color: rgba(255, 255, 255, 0.05);
 }
