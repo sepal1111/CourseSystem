@@ -9,9 +9,10 @@ import {
   validateAssignments, 
   parseTeacherCSV, 
   parseClassCSV, 
-  parseSubjectCSV, 
+  parseSubjectCSV,
   DEFAULT_ROOMS,
-  SPECIAL_ROOMS 
+  SPECIAL_ROOMS,
+  DEFAULT_ENGINE_SETTINGS
 } from './data.js';
 
 import { 
@@ -61,9 +62,30 @@ document.addEventListener("DOMContentLoaded", () => {
       state.assignments = [];
       dirty = true;
     }
+    // Migrate the old single `lockedSlot` field to the new `lockedSlots`
+    // array (supports locking more than one period for multi-hour subjects).
+    state.assignments.forEach(a => {
+      if (!Array.isArray(a.lockedSlots)) {
+        a.lockedSlots = a.lockedSlot ? [a.lockedSlot] : [];
+        delete a.lockedSlot;
+        dirty = true;
+      }
+    });
     if (!state.rooms || typeof state.rooms !== 'object' || Array.isArray(state.rooms)) {
       state.rooms = {};
       dirty = true;
+    }
+    if (!state.engineSettings || typeof state.engineSettings !== 'object' || Array.isArray(state.engineSettings)) {
+      state.engineSettings = { ...DEFAULT_ENGINE_SETTINGS };
+      dirty = true;
+    } else {
+      // Backfill any settings keys missing from an older saved state
+      Object.keys(DEFAULT_ENGINE_SETTINGS).forEach(key => {
+        if (!(key in state.engineSettings)) {
+          state.engineSettings[key] = DEFAULT_ENGINE_SETTINGS[key];
+          dirty = true;
+        }
+      });
     }
     if (dirty) {
       saveAppState(state);
@@ -236,7 +258,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Teacher form submit
   document.getElementById("form-teacher").addEventListener("submit", handleTeacherFormSubmit);
-  
+
+  // Copy busy slots from another teacher
+  document.getElementById("btn-copy-busy-slots").addEventListener("click", () => {
+    const sourceId = document.getElementById("teacher-copy-busy-source").value;
+    if (!sourceId) {
+      alert("請先選擇要複製的教師。");
+      return;
+    }
+    copyBusySlotsFromTeacher(sourceId);
+  });
+
+  // End busy-slots grid drag-painting wherever the mouse is released
+  document.addEventListener("mouseup", () => {
+    busySlotsPainting = false;
+    roomBusySlotsPainting = false;
+  });
+
   // Close Modals
   document.querySelectorAll(".btn-close-modal").forEach(btn => {
     btn.addEventListener("click", (e) => {
@@ -300,7 +338,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-auto-assign-subjects").addEventListener("click", autoAssignSubjectTeachers);
   document.getElementById("btn-clear-assignments").addEventListener("click", () => {
     if (confirm("確定要清空所有班級配課資料嗎？這將同時重置排課表！")) {
-      state.assignments.forEach(a => { a.teacherId = ""; a.lockedSlot = null; });
+      state.assignments.forEach(a => { a.teacherId = ""; a.lockedSlots = []; });
       state.schedule = null;
       saveAppState(state);
       renderCurrentTab();
@@ -312,6 +350,19 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-clear-console").addEventListener("click", () => {
     const consoleOutput = document.getElementById("engine-console-output");
     consoleOutput.innerHTML = "[Ready] 系統排課引擎已就緒，等待指令...";
+  });
+
+  // Persist engine requirement/restriction settings as soon as they change,
+  // so switching tabs mid-edit doesn't silently discard them.
+  [
+    "engine-max-backtracks", "engine-prefer-morning-core", "engine-prefer-consecutive-special",
+    "engine-max-same-subject-per-day", "engine-max-teacher-weekly-hours", "engine-homeroom-min-free-periods",
+    "engine-enforce-english-separation", "engine-enforce-forced-connect", "engine-prefer-director-half-day"
+  ].forEach(id => {
+    document.getElementById(id).addEventListener("change", () => {
+      state.engineSettings = readEngineSettingsForm();
+      saveAppState(state);
+    });
   });
 
   // Viewer Handlers
@@ -438,12 +489,81 @@ function updateGlobalStats() {
   }
 }
 
+/**
+ * Renders the dashboard's "系統基本規格矩陣" table from the actual imported
+ * data (state.classes / state.subjects) instead of fixed placeholder
+ * numbers - so before any classes exist, class counts and period subtotals
+ * correctly show as empty/zero rather than a fake reference school's stats.
+ */
+function renderDashboardSpecMatrix() {
+  const tbody = document.getElementById("dashboard-spec-matrix-tbody");
+  if (!tbody) return;
+
+  const bands = [
+    { label: "低年級 (1-2年級)", grades: [1, 2], limitText: "僅週二上全天 (第 5-7 節可排)；其餘四天半天" },
+    { label: "中年級 (3-4年級)", grades: [3, 4], limitText: "週三、週五上半天；週一、二、四全天" },
+    { label: "高年級 (5-6年級)", grades: [5, 6], limitText: "僅週三上半天；其餘四天全天" }
+  ];
+
+  const gradeTargetHours = (grade) =>
+    state.subjects.filter(s => s.grade === grade).reduce((sum, s) => sum + s.weeklyHours, 0);
+
+  let totalClasses = 0;
+  let totalHours = 0;
+  let rowsHtml = "";
+
+  bands.forEach(band => {
+    const bandClasses = state.classes.filter(c => band.grades.includes(c.grade))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    const classCountText = bandClasses.length > 0
+      ? `${bandClasses.length} 班 (${bandClasses.map(c => c.name).join(', ')})`
+      : "尚未建立班級";
+
+    const gradesWithSubjects = band.grades.filter(g => state.subjects.some(s => s.grade === g));
+    const perClassHoursSet = [...new Set(gradesWithSubjects.map(gradeTargetHours))];
+    let perClassHoursText = "—";
+    if (perClassHoursSet.length === 1) {
+      perClassHoursText = `${perClassHoursSet[0]} 節`;
+    } else if (perClassHoursSet.length > 1) {
+      perClassHoursText = `${Math.min(...perClassHoursSet)}~${Math.max(...perClassHoursSet)} 節`;
+    }
+
+    const bandSubtotal = bandClasses.reduce((sum, c) => sum + gradeTargetHours(c.grade), 0);
+    totalClasses += bandClasses.length;
+    totalHours += bandSubtotal;
+
+    rowsHtml += `
+      <tr>
+        <td>${band.label}</td>
+        <td>${classCountText}</td>
+        <td>${perClassHoursText}</td>
+        <td>${bandSubtotal} 節</td>
+        <td>${band.limitText}</td>
+      </tr>
+    `;
+  });
+
+  rowsHtml += `
+    <tr class="table-total">
+      <td>全校總計</td>
+      <td>${totalClasses} 班</td>
+      <td>—</td>
+      <td><strong>${totalHours} 節</strong></td>
+      <td>全校每週排課總額限制</td>
+    </tr>
+  `;
+
+  tbody.innerHTML = rowsHtml;
+}
+
 function renderDashboardView() {
+  renderDashboardSpecMatrix();
+
   const container = document.getElementById("dashboard-teacher-loads");
   if (!container) return;
 
   container.innerHTML = "";
-  
+
   // Sort teachers: show director/leader/homeroom/subject with mismatch first, then hourly
   const sorted = [...state.teachers].sort((a, b) => {
     if (a.role === 'hourly' && b.role !== 'hourly') return 1;
@@ -476,6 +596,9 @@ function renderDashboardView() {
     }
 
     const summaryStr = formatTeacherAssignmentSummary(t);
+    const homeroomClassText = t.role === 'homeroom' && t.targetClassId
+      ? ` (${state.classes.find(c => c.id === t.targetClassId)?.name || t.targetClassId})`
+      : '';
 
     item.innerHTML = `
       <div class="teacher-load-info" style="flex: 1;">
@@ -615,7 +738,8 @@ function ensureRoomExists(roomKey) {
     }
     state.rooms[key] = {
       name: displayName,
-      limit: 1
+      limit: 1,
+      busySlots: []
     };
     showConsoleLog(`自動依據科目資料建立專科教室【${displayName}】(代碼: ${key}，同時段上限: 1 班)`);
   }
@@ -710,7 +834,10 @@ function renderClassesAndRooms() {
           <td>
             <input type="number" class="input-field input-room-limit" data-room="${key}" value="${room.limit}" min="1" max="10" style="width: 80px;">
           </td>
-          <td>全校同時段排入「${room.name}」之班級上限 (${room.limit} 班)</td>
+          <td>
+            全校同時段排入「${room.name}」之班級上限 (${room.limit} 班)
+            ${room.busySlots && room.busySlots.length > 0 ? `<br><span class="badge bg-warning" style="font-size:11px; margin-top:4px;"><i data-lucide="lock" class="icon-small"></i> 禁止排課 ${room.busySlots.length} 節</span>` : ''}
+          </td>
           <td>
             <button class="btn btn-secondary btn-icon btn-edit-room mr-1" data-room="${key}" title="編輯教室">
               <i data-lucide="edit-3" style="width: 14px; height: 14px;"></i>
@@ -760,6 +887,11 @@ function renderClassesAndRooms() {
 // ----------------------------------------------------
 // ROOM MANAGEMENT FUNCTIONS
 // ----------------------------------------------------
+// Room Modal
+let activeRoomBusySlots = []; // Local state for edit
+let roomBusySlotsPainting = false; // True while mouse is held down dragging over the grid
+let roomBusySlotsPaintValue = false; // The busy/free state being painted onto cells during a drag
+
 function openRoomModal(roomKey = null) {
   const modal = document.getElementById("modal-room");
   if (!modal) return;
@@ -772,6 +904,7 @@ function openRoomModal(roomKey = null) {
   const limitInput = document.getElementById("room-limit");
 
   form.reset();
+  activeRoomBusySlots = [];
 
   if (roomKey && state.rooms && state.rooms[roomKey]) {
     const r = state.rooms[roomKey];
@@ -781,6 +914,7 @@ function openRoomModal(roomKey = null) {
     keyInput.value = roomKey;
     nameInput.value = r.name;
     limitInput.value = r.limit;
+    activeRoomBusySlots = r.busySlots ? [...r.busySlots] : [];
   } else {
     title.textContent = "新增專科教室";
     actionInput.value = "create";
@@ -790,8 +924,77 @@ function openRoomModal(roomKey = null) {
     limitInput.value = "1";
   }
 
+  renderRoomBusySlotsGrid();
+
   modal.classList.add("open");
   safeCreateIcons();
+}
+
+/**
+ * Renders the room's "禁止排課時段" mini calendar grid, mirroring the
+ * teacher busy-slots selector (renderBusySlotsSelectorGrid) including
+ * click-or-drag painting.
+ */
+function renderRoomBusySlotsGrid() {
+  const container = document.getElementById("room-busy-slots-grid");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const days = ["節次", "一", "二", "三", "四", "五"];
+  days.forEach(d => {
+    const el = document.createElement("div");
+    el.className = "busy-slot-label font-bold text-center";
+    el.style.justifyContent = "center";
+    el.textContent = d;
+    container.appendChild(el);
+  });
+
+  for (let period = 1; period <= 7; period++) {
+    const label = document.createElement("div");
+    label.className = "busy-slot-label";
+    label.textContent = `第 ${period} 節`;
+    container.appendChild(label);
+
+    for (let day = 1; day <= 5; day++) {
+      const slotKey = `${day}-${period}`;
+      const isBusy = activeRoomBusySlots.includes(slotKey);
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `busy-slot-btn ${isBusy ? 'busy' : ''}`;
+      btn.setAttribute("data-slot", slotKey);
+      btn.title = `星期${day} 第${period}節`;
+
+      btn.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        roomBusySlotsPainting = true;
+        roomBusySlotsPaintValue = !activeRoomBusySlots.includes(slotKey);
+        applyRoomBusySlotPaint(slotKey, btn, roomBusySlotsPaintValue);
+      });
+
+      btn.addEventListener("mouseenter", () => {
+        if (!roomBusySlotsPainting) return;
+        applyRoomBusySlotPaint(slotKey, btn, roomBusySlotsPaintValue);
+      });
+
+      container.appendChild(btn);
+    }
+  }
+}
+
+/**
+ * Sets a single room busy-slot cell to busy/free in both the local edit
+ * state (activeRoomBusySlots) and its button's visual class, without toggling.
+ */
+function applyRoomBusySlotPaint(slotKey, btn, busy) {
+  const idx = activeRoomBusySlots.indexOf(slotKey);
+  if (busy && idx === -1) {
+    activeRoomBusySlots.push(slotKey);
+    btn.classList.add("busy");
+  } else if (!busy && idx !== -1) {
+    activeRoomBusySlots.splice(idx, 1);
+    btn.classList.remove("busy");
+  }
 }
 
 function handleRoomFormSubmit(e) {
@@ -806,13 +1009,15 @@ function handleRoomFormSubmit(e) {
 
   if (!state.rooms) state.rooms = {};
 
+  const busySlots = [...activeRoomBusySlots];
+
   if (action === "create") {
     if (state.rooms[key]) {
       alert(`教室代碼/簡稱「${key}」已存在！請改用其他代碼。`);
       return;
     }
-    state.rooms[key] = { name, limit };
-    showConsoleLog(`已成功新增專科教室【${name}】(${key})，容量上限: ${limit} 班`);
+    state.rooms[key] = { name, limit, busySlots };
+    showConsoleLog(`已成功新增專科教室【${name}】(${key})，容量上限: ${limit} 班，禁止排課時段: ${busySlots.length} 節`);
   } else {
     if (oldKey !== key && state.rooms[key]) {
       alert(`教室代碼/簡稱「${key}」已被其他教室使用！`);
@@ -827,8 +1032,8 @@ function handleRoomFormSubmit(e) {
         if (a.requiresRoom === oldKey) a.requiresRoom = key;
       });
     }
-    state.rooms[key] = { name, limit };
-    showConsoleLog(`已更新專科教室設定【${name}】(${key})，容量上限: ${limit} 班`);
+    state.rooms[key] = { name, limit, busySlots };
+    showConsoleLog(`已更新專科教室設定【${name}】(${key})，容量上限: ${limit} 班，禁止排課時段: ${busySlots.length} 節`);
   }
 
   state.schedule = null;
@@ -863,6 +1068,8 @@ function deleteRoom(key) {
 
 // Teacher Modal
 let activeBusySlots = []; // Local state for edit
+let busySlotsPainting = false; // True while mouse is held down dragging over the busy-slots grid
+let busySlotsPaintValue = false; // The busy/free state being painted onto cells during a drag
 
 function openTeacherModal(teacherId = null) {
   const modal = document.getElementById("modal-teacher");
@@ -910,6 +1117,17 @@ function openTeacherModal(teacherId = null) {
     document.getElementById("teacher-id").disabled = false;
     toggleHomeroomClassInput("director");
   }
+
+  // Populate "copy busy slots from another teacher" source select (excludes self)
+  const roleLabels = { director: "主任", leader: "組長", homeroom: "導師", subject: "科任", hourly: "鐘點" };
+  const copySourceSelect = document.getElementById("teacher-copy-busy-source");
+  copySourceSelect.innerHTML = `<option value="">-- 從其他教師複製不排課時段 --</option>`;
+  state.teachers
+    .filter(t => t.id !== teacherId)
+    .forEach(t => {
+      const count = t.busySlots ? t.busySlots.length : 0;
+      copySourceSelect.innerHTML += `<option value="${t.id}">${t.name} (${roleLabels[t.role] || t.role})，已設定 ${count} 節</option>`;
+    });
 
   // Render busy slots selector mini grid
   renderBusySlotsSelectorGrid();
@@ -960,20 +1178,60 @@ function renderBusySlotsSelectorGrid() {
       btn.className = `busy-slot-btn ${isBusy ? 'busy' : ''}`;
       btn.setAttribute("data-slot", slotKey);
       btn.title = `星期${day} 第${period}節`;
-      
-      btn.addEventListener("click", () => {
-        if (activeBusySlots.includes(slotKey)) {
-          activeBusySlots = activeBusySlots.filter(s => s !== slotKey);
-          btn.classList.remove("busy");
-        } else {
-          activeBusySlots.push(slotKey);
-          btn.classList.add("busy");
-        }
+
+      // Drag-to-select: mousedown starts painting and sets the opposite of the
+      // clicked cell's current state; dragging over other cells while the
+      // button is held paints them to that same value. This also covers a
+      // plain single click, since mousedown always fires first.
+      btn.addEventListener("mousedown", (e) => {
+        e.preventDefault(); // avoid text-selection drag while painting
+        busySlotsPainting = true;
+        busySlotsPaintValue = !activeBusySlots.includes(slotKey);
+        applyBusySlotPaint(slotKey, btn, busySlotsPaintValue);
+      });
+
+      btn.addEventListener("mouseenter", () => {
+        if (!busySlotsPainting) return;
+        applyBusySlotPaint(slotKey, btn, busySlotsPaintValue);
       });
 
       container.appendChild(btn);
     }
   }
+}
+
+/**
+ * Sets a single busy-slot cell to busy/free in both the local edit state
+ * (activeBusySlots) and its button's visual class, without toggling.
+ */
+function applyBusySlotPaint(slotKey, btn, busy) {
+  const idx = activeBusySlots.indexOf(slotKey);
+  if (busy && idx === -1) {
+    activeBusySlots.push(slotKey);
+    btn.classList.add("busy");
+  } else if (!busy && idx !== -1) {
+    activeBusySlots.splice(idx, 1);
+    btn.classList.remove("busy");
+  }
+}
+
+/**
+ * Copies another teacher's busySlots into the currently-edited teacher's
+ * local edit state (e.g. for homeroom teachers of the same grade who share
+ * identical non-teaching periods), then re-renders the grid.
+ */
+function copyBusySlotsFromTeacher(sourceTeacherId) {
+  const source = state.teachers.find(t => t.id === sourceTeacherId);
+  if (!source) return;
+
+  if (activeBusySlots.length > 0 &&
+      !confirm(`確定要用「${source.name}」的不排課時段設定覆蓋目前已勾選的內容嗎？`)) {
+    return;
+  }
+
+  activeBusySlots = source.busySlots ? [...source.busySlots] : [];
+  renderBusySlotsSelectorGrid();
+  showConsoleLog(`已複製教師【${source.name}】的不排課時段設定 (${activeBusySlots.length} 節)。`);
 }
 
 function handleTeacherFormSubmit(e) {
@@ -1996,23 +2254,24 @@ function renderClassAssignments() {
       ? `<span class="badge badge-secondary">${roleLabels[selectedTeacher.role]}</span>`
       : '—';
 
-    // Locked-slot cell: e.g. 本土語言拆班需鎖定同年級各班於同一時段
+    // Locked-slot cell: e.g. 本土語言拆班需鎖定同年級各班於同一時段。A subject
+    // can have more than one weekly period, so up to `weeklyHours` slots can
+    // each be locked independently.
     const dayNames = ["", "一", "二", "三", "四", "五"];
+    const lockedSlots = assign.lockedSlots || [];
     let lockCellHtml;
     if (!assign.teacherId) {
       lockCellHtml = `<span class="text-secondary" style="font-size:11px;">請先指派教師</span>`;
-    } else if (assign.lockedSlot) {
-      lockCellHtml = `
-        <div class="flex align-items-center gap-1 flex-wrap">
-          <span class="badge bg-warning" style="font-size:11px;"><i data-lucide="lock" class="icon-small"></i> 週${dayNames[assign.lockedSlot.day]} 第${assign.lockedSlot.period}節</span>
-          <button class="btn btn-xs btn-secondary-outline btn-unlock-assign" data-assign-id="${assign.id}" title="解除鎖定">
-            <i data-lucide="lock-open"></i>
-          </button>
-        </div>
-      `;
     } else {
-      lockCellHtml = `
-        <div class="flex gap-1 align-items-center flex-wrap">
+      const lockedBadges = lockedSlots.map((slot, idx) => `
+        <span class="badge bg-warning" style="font-size:11px;">
+          <i data-lucide="lock" class="icon-small"></i> 週${dayNames[slot.day]} 第${slot.period}節
+          <button type="button" class="btn-unlock-assign-slot" data-assign-id="${assign.id}" data-slot-index="${idx}" title="解除此節鎖定" style="border:none;background:none;cursor:pointer;color:inherit;padding:0 0 0 4px;">✕</button>
+        </span>
+      `).join('');
+
+      const addRowHtml = lockedSlots.length < tmpl.weeklyHours ? `
+        <div class="flex gap-1 align-items-center flex-wrap mt-1">
           <select class="select-field select-lock-day" data-assign-id="${assign.id}" style="width:60px; padding:2px 4px; font-size:11px;">
             <option value="1">週一</option>
             <option value="2">週二</option>
@@ -2029,10 +2288,16 @@ function renderClassAssignments() {
             <option value="6">6節</option>
             <option value="7">7節</option>
           </select>
-          <button class="btn btn-xs btn-secondary-outline btn-lock-assign" data-assign-id="${assign.id}" title="鎖定此時段">
-            <i data-lucide="lock"></i>
+          <button type="button" class="btn btn-xs btn-secondary-outline btn-lock-assign" data-assign-id="${assign.id}" title="新增鎖定節次">
+            <i data-lucide="lock"></i> ${lockedSlots.length > 0 ? '再鎖一節' : '鎖定此時段'}
           </button>
         </div>
+      ` : '';
+
+      lockCellHtml = `
+        <div class="flex align-items-center gap-1 flex-wrap">${lockedBadges}</div>
+        ${addRowHtml}
+        ${lockedSlots.length > 0 ? `<div class="text-secondary" style="font-size:10px;">已鎖定 ${lockedSlots.length}/${tmpl.weeklyHours} 節</div>` : ''}
       `;
     }
 
@@ -2079,26 +2344,44 @@ function renderClassAssignments() {
       const daySel = row.querySelector(".select-lock-day");
       const periodSel = row.querySelector(".select-lock-period");
       const assign = state.assignments.find(a => a.id === assignId);
+      const dayNames = ["", "一", "二", "三", "四", "五"];
       if (assign && daySel && periodSel) {
-        assign.lockedSlot = { day: parseInt(daySel.value), period: parseInt(periodSel.value) };
+        const day = parseInt(daySel.value);
+        const period = parseInt(periodSel.value);
+        if (!Array.isArray(assign.lockedSlots)) assign.lockedSlots = [];
+
+        if (assign.lockedSlots.some(s => s.day === day && s.period === period)) {
+          alert(`週${dayNames[day]} 第${period}節已經鎖定過了，請選擇其他時段。`);
+          return;
+        }
+
+        if (assign.lockedSlots.length >= assign.weeklyHours) {
+          alert(`「${assign.subject}」每週僅 ${assign.weeklyHours} 節，鎖定節數已達上限。`);
+          return;
+        }
+
+        assign.lockedSlots.push({ day, period });
         state.schedule = null;
         saveAppState(state);
         renderClassAssignments();
-        showConsoleLog(`已鎖定「${assign.subject}」於週${["", "一", "二", "三", "四", "五"][assign.lockedSlot.day]} 第${assign.lockedSlot.period}節，請重新執行自動排課引擎以套用。`);
+        showConsoleLog(`已鎖定「${assign.subject}」於週${dayNames[day]} 第${period}節 (${assign.lockedSlots.length}/${assign.weeklyHours} 節已鎖定)，請重新執行自動排課引擎以套用。`);
       }
     });
   });
 
-  tbody.querySelectorAll(".btn-unlock-assign").forEach(btn => {
+  tbody.querySelectorAll(".btn-unlock-assign-slot").forEach(btn => {
     btn.addEventListener("click", (e) => {
       const assignId = e.currentTarget.getAttribute("data-assign-id");
+      const slotIndex = parseInt(e.currentTarget.getAttribute("data-slot-index"));
       const assign = state.assignments.find(a => a.id === assignId);
-      if (assign) {
-        assign.lockedSlot = null;
+      if (assign && Array.isArray(assign.lockedSlots) && assign.lockedSlots[slotIndex]) {
+        const removed = assign.lockedSlots[slotIndex];
+        assign.lockedSlots.splice(slotIndex, 1);
         state.schedule = null;
         saveAppState(state);
         renderClassAssignments();
-        showConsoleLog(`已解除「${assign.subject}」的鎖定時段，請重新執行自動排課引擎以套用。`);
+        const dayNames = ["", "一", "二", "三", "四", "五"];
+        showConsoleLog(`已解除「${assign.subject}」於週${dayNames[removed.day]} 第${removed.period}節的鎖定，請重新執行自動排課引擎以套用。`);
       }
     });
   });
@@ -2173,8 +2456,22 @@ function applyGradeLock() {
     return;
   }
 
+  // Each assignment may already carry its own locked slots (e.g. from
+  // per-assignment locking, or a previous grade-wide lock at another
+  // period) - append this slot rather than overwriting, skipping any
+  // assignment that's already at its weekly-hours cap or already has this
+  // exact slot locked.
+  let appliedCount = 0;
+  let skippedCount = 0;
   targetAssignments.forEach(a => {
-    a.lockedSlot = { day, period };
+    if (!Array.isArray(a.lockedSlots)) a.lockedSlots = [];
+    const alreadyLocked = a.lockedSlots.some(s => s.day === day && s.period === period);
+    if (alreadyLocked || a.lockedSlots.length >= a.weeklyHours) {
+      skippedCount++;
+      return;
+    }
+    a.lockedSlots.push({ day, period });
+    appliedCount++;
   });
 
   // The current schedule (if any) doesn't yet honor this lock - require regeneration.
@@ -2182,35 +2479,45 @@ function applyGradeLock() {
   saveAppState(state);
   renderClassAssignments();
 
-  if (statusEl) statusEl.innerHTML = `<span class="text-success">✅ 已將 ${targetAssignments.length} 個班級的「${subject}」鎖定於週${dayNames[day]} 第${period}節。請重新執行自動排課引擎以套用。</span>`;
-  showConsoleLog(`已鎖定 ${grade}年級「${subject}」共 ${targetAssignments.length} 班於週${dayNames[day]}第${period}節。`);
+  const skippedNote = skippedCount > 0 ? `（${skippedCount} 個班級已達鎖定節數上限或已鎖定該時段，已略過）` : '';
+  if (statusEl) statusEl.innerHTML = `<span class="text-success">✅ 已將 ${appliedCount} 個班級的「${subject}」鎖定於週${dayNames[day]} 第${period}節。${skippedNote}請重新執行自動排課引擎以套用。</span>`;
+  showConsoleLog(`已鎖定 ${grade}年級「${subject}」共 ${appliedCount} 班於週${dayNames[day]}第${period}節。${skippedNote}`);
 }
 
 /**
- * Clear the grade-wide lock previously applied by applyGradeLock().
+ * Clear the grade-wide lock previously applied by applyGradeLock() at the
+ * currently-selected day/period (mirrors the Apply button's slot pair, so
+ * only that one locked period is removed - other locked periods on the
+ * same multi-hour subject are left untouched).
  */
 function clearGradeLock() {
   const grade = parseInt(document.getElementById("grade-lock-grade").value);
   const subject = document.getElementById("grade-lock-subject").value;
+  const day = parseInt(document.getElementById("grade-lock-day").value);
+  const period = parseInt(document.getElementById("grade-lock-period").value);
   const statusEl = document.getElementById("grade-lock-status");
+  const dayNames = ["", "一", "二", "三", "四", "五"];
 
   const gradeClasses = state.classes.filter(c => c.grade === grade);
   const targetAssignments = state.assignments.filter(a =>
-    gradeClasses.some(c => c.id === a.classId) && a.subject === subject && a.lockedSlot
+    gradeClasses.some(c => c.id === a.classId) && a.subject === subject &&
+    Array.isArray(a.lockedSlots) && a.lockedSlots.some(s => s.day === day && s.period === period)
   );
 
   if (targetAssignments.length === 0) {
-    if (statusEl) statusEl.innerHTML = `「${grade}年級」的「${subject}」目前沒有鎖定設定。`;
+    if (statusEl) statusEl.innerHTML = `「${grade}年級」的「${subject}」在週${dayNames[day]} 第${period}節目前沒有鎖定設定。`;
     return;
   }
 
-  targetAssignments.forEach(a => { a.lockedSlot = null; });
+  targetAssignments.forEach(a => {
+    a.lockedSlots = a.lockedSlots.filter(s => !(s.day === day && s.period === period));
+  });
   state.schedule = null;
   saveAppState(state);
   renderClassAssignments();
 
-  if (statusEl) statusEl.innerHTML = `已清除 ${targetAssignments.length} 個班級的「${subject}」鎖定設定。`;
-  showConsoleLog(`已清除 ${grade}年級「${subject}」鎖定設定 (${targetAssignments.length} 筆)。`);
+  if (statusEl) statusEl.innerHTML = `已清除 ${targetAssignments.length} 個班級的「${subject}」於週${dayNames[day]} 第${period}節的鎖定設定。`;
+  showConsoleLog(`已清除 ${grade}年級「${subject}」於週${dayNames[day]} 第${period}節的鎖定設定 (${targetAssignments.length} 筆)。`);
 }
 
 function renderTeacherLoadsSidebar() {
@@ -2372,7 +2679,46 @@ function showConsoleLog(msg) {
   consoleOutput.scrollTop = consoleOutput.scrollHeight;
 }
 
+/**
+ * Populates the engine settings form fields from state.engineSettings
+ * (falls back to defaults for any missing keys).
+ */
+function populateEngineSettingsForm() {
+  const settings = { ...DEFAULT_ENGINE_SETTINGS, ...(state.engineSettings || {}) };
+
+  document.getElementById("engine-max-backtracks").value = settings.maxBacktracks;
+  document.getElementById("engine-prefer-morning-core").checked = settings.preferMorningCore;
+  document.getElementById("engine-prefer-consecutive-special").checked = settings.preferConsecutiveSpecial;
+  document.getElementById("engine-max-same-subject-per-day").value = settings.maxSameSubjectPerDay;
+  document.getElementById("engine-max-teacher-weekly-hours").value = settings.maxTeacherWeeklyHours;
+  document.getElementById("engine-homeroom-min-free-periods").value = settings.homeroomMinFreePeriods;
+  document.getElementById("engine-enforce-english-separation").checked = settings.enforceEnglishSeparation;
+  document.getElementById("engine-enforce-forced-connect").checked = settings.enforceForcedConnect;
+  document.getElementById("engine-prefer-director-half-day").checked = settings.preferDirectorHalfDay;
+}
+
+/**
+ * Reads the current engine settings form values into a plain settings object.
+ */
+function readEngineSettingsForm() {
+  return {
+    maxBacktracks: parseInt(document.getElementById("engine-max-backtracks").value) || DEFAULT_ENGINE_SETTINGS.maxBacktracks,
+    preferMorningCore: document.getElementById("engine-prefer-morning-core").checked,
+    preferConsecutiveSpecial: document.getElementById("engine-prefer-consecutive-special").checked,
+    maxSameSubjectPerDay: parseInt(document.getElementById("engine-max-same-subject-per-day").value) || DEFAULT_ENGINE_SETTINGS.maxSameSubjectPerDay,
+    maxTeacherWeeklyHours: parseInt(document.getElementById("engine-max-teacher-weekly-hours").value) || DEFAULT_ENGINE_SETTINGS.maxTeacherWeeklyHours,
+    homeroomMinFreePeriods: (() => {
+      const v = parseInt(document.getElementById("engine-homeroom-min-free-periods").value);
+      return Number.isNaN(v) || v < 0 ? DEFAULT_ENGINE_SETTINGS.homeroomMinFreePeriods : v;
+    })(),
+    enforceEnglishSeparation: document.getElementById("engine-enforce-english-separation").checked,
+    enforceForcedConnect: document.getElementById("engine-enforce-forced-connect").checked,
+    preferDirectorHalfDay: document.getElementById("engine-prefer-director-half-day").checked
+  };
+}
+
 function renderEngineView() {
+  populateEngineSettingsForm();
   const check = validateAssignments(state.teachers, state.assignments, state.classes, state.subjects);
   
   const stepTotal = document.getElementById("check-step-total-hours");
@@ -2430,9 +2776,9 @@ function startSchedulingEngine() {
     return;
   }
 
-  const maxBacktracks = parseInt(document.getElementById("engine-max-backtracks").value) || 50000;
-  const preferMorningCore = document.getElementById("engine-prefer-morning-core").checked;
-  const preferConsecutiveSpecial = document.getElementById("engine-prefer-consecutive-special").checked;
+  const engineSettings = readEngineSettingsForm();
+  state.engineSettings = engineSettings;
+  saveAppState(state);
 
   const btn = document.getElementById("btn-start-scheduling");
   btn.disabled = true;
@@ -2447,10 +2793,10 @@ function startSchedulingEngine() {
   setTimeout(() => {
     try {
       const schedule = runScheduler(
-        state.teachers, 
-        state.classes, 
-        state.assignments, 
-        { maxBacktracks, preferMorningCore, preferConsecutiveSpecial, rooms: state.rooms },
+        state.teachers,
+        state.classes,
+        state.assignments,
+        { ...engineSettings, rooms: state.rooms },
         showConsoleLog
       );
 
@@ -2509,8 +2855,24 @@ function renderViewersControls() {
   } else if (dimension === "room") {
     label.textContent = "選擇教室：";
     const rooms = state.rooms || DEFAULT_ROOMS;
-    Object.keys(rooms).forEach(key => {
-      select.innerHTML += `<option value="${key}">${rooms[key].name || key}</option>`;
+
+    // Some room references may only exist as free text on subjects/
+    // assignments/schedule cells (e.g. imported before the room was
+    // formally registered in state.rooms) - include those too, otherwise
+    // this dropdown ends up empty and the room-centric view shows nothing.
+    const roomKeys = new Set(Object.keys(rooms));
+    state.subjects.forEach(s => { if (s.requiresRoom) roomKeys.add(s.requiresRoom); });
+    state.assignments.forEach(a => { if (a.requiresRoom) roomKeys.add(a.requiresRoom); });
+    if (state.schedule) {
+      Object.values(state.schedule).forEach(classSchedule => {
+        Object.values(classSchedule).forEach(cell => {
+          if (cell && cell.requiresRoom) roomKeys.add(cell.requiresRoom);
+        });
+      });
+    }
+
+    [...roomKeys].sort((a, b) => a.localeCompare(b)).forEach(key => {
+      select.innerHTML += `<option value="${key}">${rooms[key]?.name || key}</option>`;
     });
   }
 
@@ -2655,19 +3017,34 @@ function renderClassCell(td, classId, day, period) {
   const cell = state.schedule[classId]?.[`${day}-${period}`];
   if (cell) {
     const teacher = state.teachers.find(t => t.id === cell.teacherId);
+    const teacherName = teacher ? teacher.name : cell.teacherId;
     const roomNameStr = cell.requiresRoom ? ((state.rooms || SPECIAL_ROOMS)[cell.requiresRoom]?.name || cell.requiresRoom) : '';
-    const roomBadge = cell.requiresRoom ? `<span class="timetable-card-room">${roomNameStr}</span>` : '';
     const colorClass = getTeacherColorClass(cell.teacherId);
     const isLocked = Boolean(cell.locked);
+    const lockIconHtml = isLocked ? '<i data-lucide="lock" class="timetable-card-lock-icon"></i>' : '';
 
     if (isLocked) td.classList.add("cell-pinned");
 
-    td.innerHTML = `
-      <div class="timetable-card ${colorClass} ${isLocked ? 'pinned' : ''}" draggable="${isLocked ? 'false' : 'true'}" data-subject="${cell.subject}" data-teacher-id="${cell.teacherId}" data-room="${cell.requiresRoom || ''}" data-locked="${isLocked}" title="${isLocked ? '此課程已鎖定固定時段' : ''}">
-        ${isLocked ? '<i data-lucide="lock" class="timetable-card-lock-icon"></i>' : ''}
+    // Split layout (70% subject/teacher | 30% room, all centered) when a
+    // special room is assigned; otherwise the original stacked layout.
+    const innerHtml = cell.requiresRoom ? `
+        ${lockIconHtml}
+        <div class="timetable-card-main-col">
+          <span class="timetable-card-subject">${cell.subject}</span>
+          <span class="timetable-card-teacher">${teacherName}</span>
+        </div>
+        <div class="timetable-card-room-col">
+          <span class="timetable-card-room">${roomNameStr}</span>
+        </div>
+      ` : `
+        ${lockIconHtml}
         <span class="timetable-card-subject">${cell.subject}</span>
-        <span class="timetable-card-teacher">${teacher ? teacher.name : cell.teacherId}</span>
-        ${roomBadge}
+        <span class="timetable-card-teacher">${teacherName}</span>
+      `;
+
+    td.innerHTML = `
+      <div class="timetable-card ${cell.requiresRoom ? 'has-room' : ''} ${colorClass} ${isLocked ? 'pinned' : ''}" draggable="${isLocked ? 'false' : 'true'}" data-subject="${cell.subject}" data-teacher-id="${cell.teacherId}" data-room="${cell.requiresRoom || ''}" data-locked="${isLocked}" title="${isLocked ? '此課程已鎖定固定時段' : ''}">
+        ${innerHtml}
       </div>
     `;
   }
@@ -2715,12 +3092,25 @@ function renderTeacherCell(td, teacherId, day, period) {
 
   if (assignedClassId) {
     const roomNameStr = room ? ((state.rooms || SPECIAL_ROOMS)[room]?.name || room) : '';
-    const roomBadge = room ? `<span class="timetable-card-room">${roomNameStr}</span>` : '';
-    td.innerHTML = `
-      <div class="timetable-card" style="border-left-color: var(--success-color); background-color: var(--success-bg);">
+
+    // Split layout (70% class/subject | 30% room, all centered) when a
+    // special room is assigned; otherwise the original stacked layout.
+    const innerHtml = room ? `
+        <div class="timetable-card-main-col">
+          <span class="timetable-card-subject">${assignedClassId} 班</span>
+          <span class="timetable-card-teacher">${subject}</span>
+        </div>
+        <div class="timetable-card-room-col">
+          <span class="timetable-card-room">${roomNameStr}</span>
+        </div>
+      ` : `
         <span class="timetable-card-subject">${assignedClassId} 班</span>
         <span class="timetable-card-teacher">${subject}</span>
-        ${roomBadge}
+      `;
+
+    td.innerHTML = `
+      <div class="timetable-card ${room ? 'has-room' : ''}" style="border-left-color: var(--success-color); background-color: var(--success-bg);">
+        ${innerHtml}
       </div>
     `;
   }
@@ -2729,7 +3119,7 @@ function renderTeacherCell(td, teacherId, day, period) {
 function renderRoomCell(td, roomKey, day, period) {
   // Find which class is using this room at this period
   const occupiedClasses = [];
-  
+
   for (const classId in state.schedule) {
     const cell = state.schedule[classId][`${day}-${period}`];
     if (cell && cell.requiresRoom === roomKey) {
@@ -2749,6 +3139,14 @@ function renderRoomCell(td, roomKey, day, period) {
       `;
     });
     td.innerHTML = content;
+    return;
+  }
+
+  // No class occupies this slot - if the room is marked as禁止排課 here, say so.
+  const room = (state.rooms || SPECIAL_ROOMS)[roomKey];
+  if (room?.busySlots?.includes(`${day}-${period}`)) {
+    td.className = "slot-locked";
+    td.innerHTML = `<span style="font-size: 0.7rem;">禁止排課</span>`;
   }
 }
 
@@ -2808,14 +3206,17 @@ function enableDragAndDropEvents(classId) {
       };
 
       const check = validateManualMove(
-        state.schedule, 
-        state.teachers, 
-        classId, 
-        dragSourceSlot.day, 
-        dragSourceSlot.period, 
-        targetDay, 
-        targetPeriod, 
-        lesson
+        state.schedule,
+        state.teachers,
+        classId,
+        dragSourceSlot.day,
+        dragSourceSlot.period,
+        targetDay,
+        targetPeriod,
+        lesson,
+        showConsoleLog,
+        state.rooms,
+        state.engineSettings
       );
 
       cell.classList.remove("drop-allowed", "drop-conflict");
@@ -2853,14 +3254,17 @@ function enableDragAndDropEvents(classId) {
 
       // Perform validation check
       const check = validateManualMove(
-        state.schedule, 
-        state.teachers, 
-        classId, 
-        dragSourceSlot.day, 
-        dragSourceSlot.period, 
-        targetDay, 
-        targetPeriod, 
-        lesson
+        state.schedule,
+        state.teachers,
+        classId,
+        dragSourceSlot.day,
+        dragSourceSlot.period,
+        targetDay,
+        targetPeriod,
+        lesson,
+        showConsoleLog,
+        state.rooms,
+        state.engineSettings
       );
 
       if (check.valid) {
@@ -3447,9 +3851,14 @@ function showSubjectCSVPreviewModal() {
 
   const confirmBtn = document.getElementById("btn-subject-csv-confirm-save");
   confirmBtn.onclick = function() {
+    const newlyCreatedRooms = [];
     tempImportSubjects.forEach(newS => {
       if (newS.requiresRoom) {
+        const roomExistedBefore = Boolean(state.rooms && state.rooms[newS.requiresRoom]);
         newS.requiresRoom = ensureRoomExists(newS.requiresRoom);
+        if (newS.requiresRoom && !roomExistedBefore) {
+          newlyCreatedRooms.push(state.rooms[newS.requiresRoom].name);
+        }
       }
 
       const idx = state.subjects.findIndex(s => s.id === newS.id);
@@ -3485,6 +3894,17 @@ function showSubjectCSVPreviewModal() {
     renderSubjects();
     renderClassesAndRooms();
     showConsoleLog(`成功批次匯入 ${tempImportSubjects.length} 個科目設定，專科教室與授課屬性已更新，課表已重置。`);
+
+    if (newlyCreatedRooms.length > 0) {
+      // Surface the newly-created rooms immediately by switching to the
+      // "班級與專科教室" sub-tab, where the room management table lives -
+      // otherwise the rooms exist in state but stay out of sight on the
+      // "科目設定管理" sub-tab the user is currently on.
+      const classesSubTabBtn = document.querySelector('.tab-sub-btn[data-sub-tab="classes"]');
+      if (classesSubTabBtn) classesSubTabBtn.click();
+
+      alert(`科目匯入完成！系統已自動依「特殊教室」欄位新增 ${newlyCreatedRooms.length} 個專科教室：${newlyCreatedRooms.join('、')}。\n已為您切換到「班級與專科教室」頁籤，請確認各教室的同時段容納上限是否正確。`);
+    }
   };
 }
 

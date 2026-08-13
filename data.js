@@ -9,6 +9,21 @@ export const SPECIAL_ROOMS = DEFAULT_ROOMS;
 export const DEFAULT_SUBJECTS = [];
 export const DEFAULT_TEACHERS = [];
 
+// Default auto-scheduling engine requirements/restrictions. These mirror the
+// engine's previously hardcoded behavior, so leaving every checkbox at its
+// default reproduces the original scheduling result exactly.
+export const DEFAULT_ENGINE_SETTINGS = {
+  maxBacktracks: 50000,
+  preferMorningCore: true,
+  preferConsecutiveSpecial: true,
+  maxSameSubjectPerDay: 2,
+  enforceEnglishSeparation: true,
+  enforceForcedConnect: true,
+  homeroomMinFreePeriods: 2,
+  preferDirectorHalfDay: true,
+  maxTeacherWeeklyHours: 35
+};
+
 /**
  * Parses teacher CSV content
  * CSV schema: 教師編號,姓名,身分職務,基本節數,帶班班級,專長科目
@@ -277,7 +292,8 @@ export function getInitialState() {
     subjects: [],
     assignments: [],
     rooms: { ...DEFAULT_ROOMS },
-    schedule: null
+    schedule: null,
+    engineSettings: { ...DEFAULT_ENGINE_SETTINGS }
   };
 }
 

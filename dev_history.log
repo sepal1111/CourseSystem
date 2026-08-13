@@ -1,3 +1,192 @@
+## [2026-08-13 14:45:00] - 儀表板「系統基本規格矩陣」改為依實際資料動態計算，不再顯示固定範例校數字
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 系統基本規格矩陣有這些資料，但是當尚未建立班級前，不該有班級數、小記節數統計
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   查明 `index.html` 儀表板頁籤的「系統基本規格矩陣」表格內容（低/中/高年級的班級數、班級 ID 清單、每班節數、小計節數）皆為寫死的純靜態 HTML（例如固定顯示「4 班 (101, 102, 201, 202)」「92 節」等），完全未串接 `state.classes`／`state.subjects`，因此即使尚未匯入任何班級，畫面仍會顯示一所假想範例學校（15 班、429 節）的完整數據，造成誤導。
+    *   將表格 `<tbody>` 改為空容器 `#dashboard-spec-matrix-tbody`，由新增的 `renderDashboardSpecMatrix()` 依低/中/高三個年級組別動態計算：「班級數」與班級名稱清單直接來自 `state.classes`（無班級時顯示「尚未建立班級」，而非假資料）；「每班每週節數」依 `state.subjects` 加總各年級科目節數（同組別內各年級節數不一致時顯示範圍，例如「23~25 節」；尚未設定科目時顯示「—」）；「小計節數」僅依「實際已建立的班級」加總，因此在尚未建立班級前必為 0，不會出現虛構統計；「時段分配限制」文字為固定校務規則說明（對應 `scheduler.js` 中寫死的半天制邏輯），與資料匯入狀態無關，維持靜態呈現。全校總計列同步依上述三組別加總動態計算。
+    *   同時修正 `renderDashboardView()` 中既有的潛在錯誤：`homeroomClassText` 變數被使用卻從未宣告（會在有導師教師資料時拋出 `ReferenceError`，中斷整個教師負擔清單渲染），補上依 `t.targetClassId` 查找班級名稱的正確計算邏輯。
+    *   已以 Node VM 直接執行 `renderDashboardSpecMatrix()` 原始碼驗證三種情境：完全無班級無科目時全部年級組別顯示「尚未建立班級」且小計與總計皆為 0（不再出現舊有硬式範例數字）；僅設定科目未建立班級時「每班每週節數」正確依科目算出，但班級數與小計仍正確維持空/0；實際建立班級後班級名稱清單、小計節數與全校總計皆正確反映真實資料。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 「系統基本規格矩陣」表格內容改為空 `<tbody id="dashboard-spec-matrix-tbody">`，移除寫死的範例學校數據。
+    *   `[MODIFIED]` `app.js`: 新增 `renderDashboardSpecMatrix()` 依實際資料動態渲染規格矩陣並於 `renderDashboardView()` 呼叫；修正 `homeroomClassText` 未宣告的 ReferenceError。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次儀表板規格矩陣動態化與相關錯誤修正歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-13 14:15:00] - 科目匯入自動建立新專科教室時，主動切換頁籤並提示使用者確認
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 匯入科目檔案中，會指定特殊教室，因此當匯入後專科教室應該要一併顯示在管理介面中
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   先以 Node VM 直接執行 `data.js` 的 `parseSubjectCSV()` 與 `app.js` 的 `showSubjectCSVPreviewModal()`／`ensureRoomExists()` 實際原始碼，模擬「特殊教室」欄位有值的科目 CSV 匯入流程，確認 `state.rooms` 本來就會被正確寫入、且 `renderClassesAndRooms()` 也確實會重新渲染——資料層與渲染層本身並無缺陷。
+    *   問題在於「可視性」：匯入完成後的提示訊息（`showConsoleLog`）只會寫入「自動排課引擎」頁籤的運算主控台，與使用者當下所在的「科目設定管理」子頁籤完全無關；且新建立的教室雖已存在於資料中，畫面仍停留在科目子頁籤，使用者不會主動切換到「班級與專科教室」子頁籤去查看，因而產生「匯入後專科教室沒有顯示」的觀感。
+    *   於 `showSubjectCSVPreviewModal()` 的確認匯入處理中，比對每筆科目的 `requiresRoom` 在呼叫 `ensureRoomExists()` 前是否已存在於 `state.rooms`，蒐集本次匯入「新建立」的教室名稱（同一教室被多個年級同時引用時自動去重，不重複列出）。若本次匯入確實新建立了教室，匯入完成後自動點擊切換至「班級與專科教室」子頁籤，並以 `alert()` 明確列出新建立的教室名稱，提醒使用者確認同時段容納上限設定；若匯入的教室皆已存在，則不彈出提示，維持原有安靜的匯入流程。
+    *   已以 Node VM 驗證三種情境：全新教室匯入後正確觸發子頁籤切換與提示、匯入已存在教室時不觸發任何提示、同一新教室被多個年級同時引用時提示訊息僅列出一次（不重複）。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `app.js`: `showSubjectCSVPreviewModal()` 確認匯入處理新增新建教室追蹤、自動切換「班級與專科教室」子頁籤、匯入完成提示訊息。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次科目匯入教室可視性改善歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-13 13:40:00] - 新增專科教室「禁止排課時段」編輯功能
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 增加專科教室禁止排課的編輯功能
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   `Room` 資料結構新增 `busySlots`（格式與教師 `busySlots` 相同的 `"day-period"` 字串陣列），`ensureRoomExists()`（CSV/Excel 匯入自動建教室時）預設帶入空陣列。
+    *   `index.html` 的新增/編輯專科教室 Modal 新增「禁止排課時段」格狀選擇器，重用既有 `.busy-slots-selector` 樣式；`app.js` 新增 `renderRoomBusySlotsGrid()`／`applyRoomBusySlotPaint()`，比照教師忙碌時段的點擊/拖曳塗色機制（`mousedown` 決定塗色值、`mouseenter` 延伸塗色、全域 `mouseup` 結束），`openRoomModal()` 讀入既有 `busySlots`、`handleRoomFormSubmit()` 寫回。
+    *   「班級與專科教室」列表在教室有設定禁排時段時，額外顯示「禁止排課 N 節」徽章。
+    *   `scheduler.js` 的 `isValid()` 第 5 項約束新增：若科目所需教室在該時段被標記禁止排課，直接判定不可排入；`getSortedSlotsForLesson()` 同步預先過濾禁排時段候選；`validateManualMove()`（課表拖拉調整）新增相同檢查並回傳對應原因訊息；回溯超時的失敗提示新增「教室禁排時段過多」的可能原因說明。
+    *   以「班級為中心」課表無課但該教室該時段被禁排時，於「以專科教室為中心」檢視顯示「禁止排課」提示（沿用既有 `.slot-locked` 樣式）。
+    *   已以 Node VM 直接執行程式碼片段驗證：教室僅剩單一可用時段時排課引擎正確被迫排入該時段、教室完全禁排時乾淨回報失敗、手動拖拉調整正確擋下/放行、Modal 開啟/塗色/儲存流程正確讀寫 `state.rooms[key].busySlots`。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 新增專科教室 Modal 的禁止排課時段格狀選擇器。
+    *   `[MODIFIED]` `app.js`: 新增 `renderRoomBusySlotsGrid()`／`applyRoomBusySlotPaint()`，`openRoomModal()`／`handleRoomFormSubmit()`／`ensureRoomExists()` 讀寫 `busySlots`，教室列表徽章顯示，`renderRoomCell()` 顯示禁排提示。
+    *   `[MODIFIED]` `scheduler.js`: `isValid()`／`getSortedSlotsForLesson()`／`validateManualMove()` 新增教室禁排時段檢查，失敗提示訊息補充說明。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次專科教室禁排時段功能開發歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-13 13:00:00] - 課表檢視卡片改為「教室分欄」排版，並修復「以專科教室為中心」檢視無資料的問題
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 在課表檢視上，每一節課內容排版改為以下邏輯：1.以班級為中心：如果該節課有專科教室安排，採左右兩欄，左欄兩列，左欄佔70%，上方顯示科目，下方顯示教師，右欄佔30%顯示專科教室，文字都水平垂直置中 2.以教師為中心：（同上）另外以專科教室為中心的檢視維度沒有顯示資料
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   `style.css` 新增 `.timetable-card.has-room`（`flex-direction: row`）搭配 `.timetable-card-main-col`（70%，科目/教師兩列置中）與 `.timetable-card-room-col`（30%，教室名稱置中）；鎖定圖示原本用 `float: right` 在橫向佈局下會跑版，改為絕對定位於卡片右上角（`.timetable-card` 加上 `position: relative`）。
+    *   `app.js` 的 `renderClassCell()`／`renderTeacherCell()`：該節課有 `requiresRoom` 時輸出新的兩欄分割標記，否則維持原本上下堆疊排版不變。
+    *   追查「以專科教室為中心無資料」根因：教室下拉選單過去僅列出已在 `state.rooms` 正式登記的教室；但科目/配課的 `requiresRoom` 欄位可能只是匯入時的自由文字（例如舊版資料或未經過教室註冊流程），實際存在於課表中卻從未真正登記到 `state.rooms`，導致下拉選單完全空白、整個檢視表格因此顯示不出任何資料。`renderViewersControls()` 的教室分支改為同時掃描 `state.rooms`、所有科目、配課與課表儲存格中出現過的教室代碼，取聯集後再排序顯示，即使教室未正式登錄也能被選取查看。
+    *   已以 Node VM 直接執行 `renderClassCell`／`renderTeacherCell`／`renderViewersControls` 原始碼片段驗證：有教室/無教室兩種情境卡片結構皆正確；重現「教室僅為自由文字、未登錄於 state.rooms」情境後確認新邏輯能正確列出該教室供選取。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `style.css`: 新增 `.timetable-card.has-room` 兩欄分割排版樣式，鎖定圖示改為絕對定位。
+    *   `[MODIFIED]` `app.js`: `renderClassCell()`／`renderTeacherCell()` 依是否有教室輸出對應排版；`renderViewersControls()` 教室選單改為聯集掃描避免遺漏未正式登記的教室。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次課表卡片排版與教室檢視修復歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-13 12:25:00] - 「選擇班級」下拉選單改為使用標題文字剩餘寬度
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 右側「選擇班級」下拉選單改為使用標題文字剩下的寬度
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   延續前次調整，將 `#select-assign-class` 的行內樣式由 `width: auto; flex-shrink: 0;`（依自身內容自動縮放）改為 `flex: 1; min-width: 0;`，使其在標題（固定寬度、不換行）之外，填滿列中剩餘的橫向空間。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 調整「班級配課矩陣」標題列選單樣式為 `flex: 1`。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次選單寬度調整歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-13 12:20:00] - 「班級配課矩陣」標題文字加大並防止換行，右側選單自動調整寬度
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 班級配課矩陣區文字區塊加大，文字不要擠到第二行，右側的選擇班級選單自動調整
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   根因為標題列使用 `flex-justify-between`，右側 `#select-assign-class` 沿用全域 `.select-field { width:100% }` 樣式作為 flex-basis，與標題互搶版面空間，導致標題在版面不足時被壓縮進而換行。
+    *   將標題 `<h3>` 加上 `font-size: 1.35rem; white-space: nowrap; flex-shrink: 0;` 使其恆為單行且不再參與伸縮；`#select-assign-class` 改為 `width: auto; flex-shrink: 0;`，依目前選取班級名稱自動調整寬度，不再搶占標題空間。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 調整「班級配課矩陣」標題與班級選單樣式。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次標題排版修正歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-13 12:10:00] - 「同年級課程鎖定工具」控制項排成單列，科目選單寬度固定 150px
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 選擇鎖定科目選單以及要鎖定星期幾、第幾節，套用鎖定、清除鎖定等按鈕排列在同一列，科目選單寬度指定150PX
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   將控制項容器由 `flex-wrap` 改為顯式 `flex-wrap: nowrap`，強制年級/科目/星期/節次選單與套用/清除按鈕排列在同一列，並加上 `overflow-x: auto` 作為版面過窄時的安全退路。
+    *   每個控制項加上 `flex-shrink: 0`（含按鈕 `white-space: nowrap`），避免版面擠壓時又被壓縮回文字截斷的問題；科目選單寬度依需求明確指定為 `150px`。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 「同年級課程鎖定工具」控制列改為單列排列，科目選單固定 150px 寬。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次控制項排版調整歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-13 12:05:00] - 加大「同年級課程鎖定工具」下拉選單寬度，避免文字被遮擋
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 這個區塊中的下拉按鈕有些文字被遮擋，請加大按鈕寬度
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   「同年級課程鎖定工具」的年級／星期／節次三個下拉選單原本寬度（90-100px）不足以完整顯示如「星期五」等三字選項（含瀏覽器原生下拉箭頭與內距），導致文字被截斷。將年級與星期選單寬度調整為 120px、節次選單調整為 110px。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 調整「同年級課程鎖定工具」三個下拉選單寬度。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次下拉選單寬度修正歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-13 11:20:00] - 配課鎖定時段支援多節課分別鎖定不同時段（原本每筆配課僅能鎖定 1 節）
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 在班級配課中有鎖定指定科目到指定時間的功能，但是如果該科目節數不是只有1節，就無法指定另外剩餘的節數
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   資料模型由 `CourseAssignment.lockedSlot`（單一 `{day, period}` 物件）改為 `lockedSlots`（陣列，最多 `weeklyHours` 筆），`app.js` 啟動載入流程新增自動遷移：偵測到舊格式 `lockedSlot` 會自動轉換為 `lockedSlots: [該時段]` 並移除舊欄位，向下相容既有存檔。
+    *   `scheduler.js` 課堂展開時依序將 `lockedSlots[0], [1], [2]…` 對應釘選到第 i 堂課，未鎖定的剩餘節數仍交由演算法自動排入；強制連排規則（自然/社會、高年級英文）在「有任一節被鎖定」時仍會讓位給手動鎖定，維持既有設計。
+    *   「線上互動配課」表格每列改為列出所有已鎖定節次的標籤（各自可單獨解鎖），未達節數上限時才顯示「再鎖一節」的時段選擇器，並加入重複時段與超過節數上限的防呆提示。
+    *   同年級鎖定工具（`applyGradeLock`／`clearGradeLock`）改為「新增」而非「覆蓋」該時段，可對同一科目重複套用不同時段以逐節鎖定整個年級；清除鎖定改為只清除目前選取的那一節。
+    *   已以 Node VM 執行 `scheduler.js`／`app.js` 內實際原始碼片段驗證：多節課部分鎖定＋自動排入剩餘節數、全部節數手動鎖定、鎖定時段互相衝突時乾淨回報失敗、單筆鎖定與同年級鎖定工具的疊加/上限/去重/清除邏輯皆正確。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `data.js`／`app.js`: `lockedSlot` 遷移為 `lockedSlots` 陣列，啟動時自動遷移舊資料。
+    *   `[MODIFIED]` `scheduler.js`: 課堂展開依序套用多個鎖定時段，強制連排規則同步比照陣列判斷。
+    *   `[MODIFIED]` `app.js`: 「線上互動配課」表格多節鎖定 UI 與事件、`applyGradeLock()`／`clearGradeLock()` 改為疊加式鎖定。
+    *   `[MODIFIED]` `index.html`: 同年級鎖定工具按鈕文字與操作提示更新。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次多節鎖定功能開發歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-13 10:45:00] - 教師「不可排課時段」新增複製其他教師設定＋滑鼠拖曳選取功能
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 編輯教師功能中，有不可排課時段設定功能，但是因為同一個年級的導師需要有共同不排課時間，幫我增加複製其他教師的不排課時間設定功能，並且增加按下滑鼠可以滑動選擇功能
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   格子上方新增「從其他教師複製不排課時段」下拉選單（列出除自己外所有教師與其已設定節數）與「複製套用」按鈕；`copyBusySlotsFromTeacher()` 於目前已有勾選內容時跳出覆蓋確認框，複製後重新渲染格子。
+    *   原本的「點擊切換」改為「按下滑鼠即依當前格狀態決定該次拖曳的塗色值（原本空堂→畫成忙碌，原本忙碌→畫成空堂）」，拖曳滑過的格子套用同一塗色值：`mousedown` 開始塗色並套用第一格、`mouseenter` 延伸塗色、全域 `mouseup` 結束塗色，單純點一下的行為維持不變。
+    *   已以 Node VM 執行 `applyBusySlotPaint`／`copyBusySlotsFromTeacher` 原始碼片段驗證：拖曳新增/清除、重複塗色不重複、覆蓋前確認、取消時保留原選取、深拷貝不污染來源教師資料、來源教師無資料時略過確認等情境皆正確。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 教師 Modal 新增複製來源下拉選單與按鈕。
+    *   `[MODIFIED]` `app.js`: 新增 `copyBusySlotsFromTeacher()`／`applyBusySlotPaint()`，`renderBusySlotsSelectorGrid()` 改為拖曳塗色機制。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次教師忙碌時段功能擴充歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-13 10:00:00] - 自動排課引擎新增「需求與特別限制」勾選/數值設定功能
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 分析目前所有的功能，並且針對自動排課的功能，增加可以勾選需求與特別限制的功能，已經有的功能必須保留
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   分析既有系統後，將原本寫死於 `scheduler.js` 程式碼中的多項硬性/軟性排課規則改為可由使用者於「自動排課引擎」頁面勾選/調整的參數：同一科目同一天上限節數（預設2）、教師每週最大授課節數（預設35）、導師每日至少保留空堂節數（預設2，可設0停用）、高年級英文與彈(英)不同天、自然/社會與高年級英文強制連排、主任/組長偏好半天集中授課。所有預設值皆等同原本寫死的行為，確保未變更任何設定時排課結果不變。
+    *   `data.js` 新增 `DEFAULT_ENGINE_SETTINGS` 並加入初始 `state.engineSettings`；`app.js` 啟動時合併/回填舊存檔缺少的設定欄位，`change` 事件即時持久化設定（避免切換分頁後遺失未套用的修改）。
+    *   已以 Node VM 執行 `scheduler.js` 原始碼片段驗證：預設值排課結果與原本行為一致、停用強制連排仍可排課、教師週節數上限可正確觸發預檢查失敗、放寬/收緊同科目每日上限與手動調整驗證皆如預期運作。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `data.js`: 新增 `DEFAULT_ENGINE_SETTINGS` 並加入 `getInitialState()`。
+    *   `[MODIFIED]` `index.html`: 「自動排課引擎」頁新增「需求與特別限制」勾選/數值設定區塊。
+    *   `[MODIFIED]` `app.js`: 讀寫 `state.engineSettings`、表單即時持久化、傳入 `runScheduler()`。
+    *   `[MODIFIED]` `scheduler.js`: 原寫死之限制條件改為可由 `params` 控制。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次自動排課限制條件功能開發歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
 ## [2026-08-12 16:35:00] - 修正高年級英語連排規則：涵蓋「英文」2堂與「彈(英)」，週2堂時強制整堂連排
 
 *   **使用者提示詞 / 需求 (User Prompt):**

@@ -14,6 +14,18 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
   const preferConsecutiveSpecial = params.preferConsecutiveSpecial !== false;
   const roomsMap = params.rooms || SPECIAL_ROOMS;
 
+  // Configurable requirements / special restrictions (see engine settings UI).
+  // Defaults reproduce the engine's original hardcoded behavior.
+  const maxSameSubjectPerDay = Number.isInteger(params.maxSameSubjectPerDay) && params.maxSameSubjectPerDay > 0
+    ? params.maxSameSubjectPerDay : 2;
+  const enforceEnglishSeparation = params.enforceEnglishSeparation !== false;
+  const enforceForcedConnect = params.enforceForcedConnect !== false;
+  const homeroomMinFreePeriods = Number.isInteger(params.homeroomMinFreePeriods) && params.homeroomMinFreePeriods >= 0
+    ? params.homeroomMinFreePeriods : 2;
+  const preferDirectorHalfDay = params.preferDirectorHalfDay !== false;
+  const maxTeacherWeeklyHours = Number.isInteger(params.maxTeacherWeeklyHours) && params.maxTeacherWeeklyHours > 0
+    ? params.maxTeacherWeeklyHours : 35;
+
   logCallback("===============================");
   logCallback(`[Engine] 啟動自動排課引擎...`);
   logCallback(`[Engine] 總班級數: ${classes.length}，總教師數: ${teachers.length}`);
@@ -43,7 +55,8 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
   const FORCED_CONNECT_HIGH_GRADE_ENGLISH_SUBJECTS = ["英語", "英文", "彈(英)"];
 
   function getForcedConnectPattern(assign) {
-    if (assign.lockedSlot) return null;
+    if (!enforceForcedConnect) return null;
+    if (assign.lockedSlots && assign.lockedSlots.length > 0) return null;
 
     const isCoreSubject = FORCED_DOUBLE_SUBJECTS.includes(assign.subject);
     let isHighGradeEnglish = false;
@@ -59,9 +72,11 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
   }
 
   // 1. Convert weekly CourseAssignments into a list of individual Lesson tokens
-  // An assignment with a `lockedSlot` (day/period) has its first lesson token
-  // pinned to that fixed slot - used e.g. for split-class local-language
-  // courses that must run at the identical time across a whole grade.
+  // An assignment's `lockedSlots` (array of {day, period}, up to weeklyHours
+  // entries) pins that many of its lesson tokens to fixed slots in order -
+  // used e.g. for split-class local-language courses that must run at the
+  // identical time across a whole grade, or for subjects with more than one
+  // weekly period where each period needs its own fixed slot.
   const lessons = [];
   validAssignments.forEach(assign => {
     const connectPattern = getForcedConnectPattern(assign);
@@ -117,9 +132,10 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
       return;
     }
 
+    const lockedSlots = assign.lockedSlots || [];
     for (let i = 0; i < assign.weeklyHours; i++) {
-      const isLocked = i === 0 && assign.lockedSlot &&
-        Number.isInteger(assign.lockedSlot.day) && Number.isInteger(assign.lockedSlot.period);
+      const slot = lockedSlots[i];
+      const isLocked = Boolean(slot) && Number.isInteger(slot.day) && Number.isInteger(slot.period);
 
       lessons.push({
         id: `${assign.classId}-${assign.subject}-${assign.teacherId}-${i}`,
@@ -131,9 +147,9 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
         lessonIndex: i, // 0-indexed index of the lesson in this assignment
         weeklyHours: assign.weeklyHours,
         groupRole: null,
-        locked: Boolean(isLocked),
-        lockedDay: isLocked ? assign.lockedSlot.day : null,
-        lockedPeriod: isLocked ? assign.lockedSlot.period : null
+        locked: isLocked,
+        lockedDay: isLocked ? slot.day : null,
+        lockedPeriod: isLocked ? slot.period : null
       });
     }
   });
@@ -282,7 +298,7 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
 
   const impossibleTeachers = [];
   Object.keys(teacherTotalHours).forEach(tId => {
-    if (teacherTotalHours[tId] > 35) {
+    if (teacherTotalHours[tId] > maxTeacherWeeklyHours) {
       const tObj = teachers.find(t => t.id === tId);
       impossibleTeachers.push({
         id: tId,
@@ -293,9 +309,9 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
   });
 
   if (impossibleTeachers.length > 0) {
-    logCallback(`[Engine] ❌ 發現實體不可能排課條件！以下教師配課總節數超出單週最大可用時段 (35 節)：`);
+    logCallback(`[Engine] ❌ 發現實體不可能排課條件！以下教師配課總節數超出單週最大可用時段設定 (${maxTeacherWeeklyHours} 節)：`);
     impossibleTeachers.forEach(t => {
-      logCallback(`  - 教師: ${t.name} (已被指派 ${t.assigned} 節 / 每週上限 35 節)`);
+      logCallback(`  - 教師: ${t.name} (已被指派 ${t.assigned} 節 / 每週上限 ${maxTeacherWeeklyHours} 節)`);
     });
     logCallback(`[Engine] 💡 提示：單一教師無法在同一時段同時於兩個班級上課。請前往「線上互動配課」，將部份班級科目分散指派給其他兼任/鐘點教師。`);
     return null;
@@ -369,14 +385,17 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
     // Constraint 4: Teacher already teaching another class in this slot?
     if (teacherSchedule[teacherId][day][period] !== null) return false;
 
-    // Constraint 5: Special room limit exceeded?
+    // Constraint 5: Special room limit exceeded, or room blocked at this slot?
     if (requiresRoom) {
+      const room = roomsMap[requiresRoom];
+      if (room?.busySlots?.includes(`${day}-${period}`)) return false;
+
       const currentUsage = roomUsage[requiresRoom] ? (roomUsage[requiresRoom][day][period] || 0) : 0;
-      const maxLimit = roomsMap[requiresRoom]?.limit || 1;
+      const maxLimit = room?.limit || 1;
       if (currentUsage >= maxLimit) return false;
     }
 
-    // Constraint 6: Strict limit of max 2 periods of the same subject on the same day
+    // Constraint 6: Strict limit of max N periods of the same subject on the same day (configurable)
     let subjectCountToday = 0;
     for (let p = 1; p <= 7; p++) {
       const scheduled = classSchedule[classId][day][p];
@@ -384,11 +403,11 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
         subjectCountToday++;
       }
     }
-    if (subjectCountToday >= 2) return false;
+    if (subjectCountToday >= maxSameSubjectPerDay) return false;
 
-    // Constraint 7: High Grade (5, 6) 彈(英) and 英文 cannot be on the same day
+    // Constraint 7: High Grade (5, 6) 彈(英) and 英文 cannot be on the same day (configurable)
     const cls = classMap.get(classId);
-    if (cls && cls.grade >= 5) {
+    if (enforceEnglishSeparation && cls && cls.grade >= 5) {
       if (lesson.subject === "彈(英)" || lesson.subject === "英文") {
         const conflictSubject = lesson.subject === "彈(英)" ? "英文" : "彈(英)";
         for (let p = 1; p <= 7; p++) {
@@ -470,7 +489,10 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
         if (isSlotAllowedForClass(lesson.classId, day, period)) {
           // Check if teacher is busy
           if (t && t.busySlots.includes(`${day}-${period}`)) continue;
-          
+
+          // Check if the required special room is blocked at this slot
+          if (lesson.requiresRoom && roomsMap[lesson.requiresRoom]?.busySlots?.includes(`${day}-${period}`)) continue;
+
           candidates.push({ day, period, score: 0 });
         }
       }
@@ -567,19 +589,19 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
         score -= 20;
       }
 
-      // H5: Homeroom teachers should keep at least 2-3 free periods each day
-      if (t && t.role === 'homeroom') {
+      // H5: Homeroom teachers should keep at least N free periods each day (configurable; 0 disables)
+      if (t && t.role === 'homeroom' && homeroomMinFreePeriods > 0) {
         const dailyCapacity = getTeacherDailyCapacity(lesson.teacherId, day);
         const freeAfterPlacing = dailyCapacity - (teacherLoadOnDay + 1);
-        if (freeAfterPlacing < 2) {
-          score -= (2 - freeAfterPlacing) * 45; // Increasingly penalize squeezing below 2 free periods
-        } else if (freeAfterPlacing >= 3) {
-          score += 15; // Reward leaving a comfortable 3+ free periods
+        if (freeAfterPlacing < homeroomMinFreePeriods) {
+          score -= (homeroomMinFreePeriods - freeAfterPlacing) * 45; // Increasingly penalize squeezing below the minimum
+        } else if (freeAfterPlacing >= homeroomMinFreePeriods + 1) {
+          score += 15; // Reward leaving a comfortable buffer beyond the minimum
         }
       }
 
-      // H6: Directors / section leaders should teach in one continuous half-day block
-      if (t && (t.role === 'director' || t.role === 'leader')) {
+      // H6: Directors / section leaders should teach in one continuous half-day block (configurable)
+      if (preferDirectorHalfDay && t && (t.role === 'director' || t.role === 'leader')) {
         let morningCount = 0;
         let afternoonCount = 0;
         for (let p = 1; p <= 4; p++) {
@@ -739,7 +761,8 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
       logCallback(`  1. 某些科任/導師的授課總節數超出其可用授課時段。`);
       logCallback(`  2. 專科教室 (例如電腦教室) 設定了太多配課，在時段限制內排不下。`);
       logCallback(`  3. 教師自訂不可排課時段 (忙碌) 太多，限制了排課空間。`);
-      logCallback(`[Engine] 建議：請點擊「線上互動配課」檢查教師負荷，或在排課參數中增加最大回溯上限，或調整不可排課時段。`);
+      logCallback(`  4. 專科教室設定了過多「禁止排課時段」，導致該教室可用時段不足。`);
+      logCallback(`[Engine] 建議：請點擊「線上互動配課」檢查教師負荷，或在排課參數中增加最大回溯上限，或調整不可排課時段／教室禁排時段。`);
     } else {
       logCallback(`[Engine] ❌ 發生非預期錯誤：${err.message}`);
       console.error(err);
@@ -752,8 +775,11 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
  * Validates a single manual swap/move in the schedule.
  * Returns { valid: boolean, reason: string | null }
  */
-export function validateManualMove(schedule, teachers, classId, fromDay, fromPeriod, toDay, toPeriod, lesson, logCallback = console.log, customRooms = null) {
+export function validateManualMove(schedule, teachers, classId, fromDay, fromPeriod, toDay, toPeriod, lesson, logCallback = console.log, customRooms = null, engineSettings = null) {
   const roomsMap = customRooms || SPECIAL_ROOMS;
+  const maxSameSubjectPerDay = Number.isInteger(engineSettings?.maxSameSubjectPerDay) && engineSettings.maxSameSubjectPerDay > 0
+    ? engineSettings.maxSameSubjectPerDay : 2;
+  const enforceEnglishSeparation = engineSettings ? engineSettings.enforceEnglishSeparation !== false : true;
 
   // 0. Locked lessons are pinned - can't be dragged away, and nothing can be
   // dropped on top of them.
@@ -806,8 +832,14 @@ export function validateManualMove(schedule, teachers, classId, fromDay, fromPer
 
   // 4. Check Special Room constraints
   if (lesson.requiresRoom) {
-    const limit = roomsMap[lesson.requiresRoom]?.limit || 1;
-    const roomName = roomsMap[lesson.requiresRoom]?.name || lesson.requiresRoom;
+    const roomInfo = roomsMap[lesson.requiresRoom];
+    const limit = roomInfo?.limit || 1;
+    const roomName = roomInfo?.name || lesson.requiresRoom;
+
+    if (roomInfo?.busySlots?.includes(`${toDay}-${toPeriod}`)) {
+      return { valid: false, reason: `專科教室「${roomName}」於該時段設為禁止排課` };
+    }
+
     let roomUsageCount = 0;
     
     for (const cId in schedule) {
@@ -835,11 +867,11 @@ export function validateManualMove(schedule, teachers, classId, fromDay, fromPer
       subjectCountToday++;
     }
   }
-  if (subjectCountToday >= 2) {
-    return { valid: false, reason: `同一天不可排超過兩堂「${lesson.subject}」` };
+  if (subjectCountToday >= maxSameSubjectPerDay) {
+    return { valid: false, reason: `同一天不可排超過 ${maxSameSubjectPerDay} 堂「${lesson.subject}」` };
   }
 
-  if (grade >= 5 && (lesson.subject === "彈(英)" || lesson.subject === "英文")) {
+  if (enforceEnglishSeparation && grade >= 5 && (lesson.subject === "彈(英)" || lesson.subject === "英文")) {
     const conflictSubject = lesson.subject === "彈(英)" ? "英文" : "彈(英)";
     for (let p = 1; p <= 7; p++) {
       if (p === toPeriod) continue;

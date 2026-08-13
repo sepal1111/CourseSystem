@@ -1012,6 +1012,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Draggable timetable item cards */
 .timetable-card {
+  position: relative;
   background-color: var(--primary-light);
   border-left: 4px solid var(--primary-color);
   border-radius: var(--border-radius-sm);
@@ -1025,6 +1026,37 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+}
+
+/* When the lesson has a special-room assignment: split into a 70% subject/teacher
+   column and a 30% room column, both centered - instead of the default stacked layout. */
+.timetable-card.has-room {
+  flex-direction: row;
+  align-items: stretch;
+  padding: 0;
+}
+
+.timetable-card-main-col {
+  width: 70%;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.4rem 0.3rem;
+  gap: 0.2rem;
+}
+
+.timetable-card-room-col {
+  width: 30%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.4rem 0.2rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 /* Course colorway by teacher role (class-centric view): homeroom teacher = light blue, others = light green */
@@ -1053,7 +1085,9 @@ h1, h2, h3, h4, h5, h6 {
   width: 12px;
   height: 12px;
   color: var(--warning-color);
-  float: right;
+  position: absolute;
+  top: 4px;
+  right: 4px;
 }
 
 .timetable-card-subject {
@@ -1076,6 +1110,21 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 3px;
   margin-top: 0.2rem;
   color: var(--info-color);
+}
+
+/* Inside the 30% room column, the room label stands alone - no pill background needed */
+.timetable-card.has-room .timetable-card-main-col .timetable-card-subject,
+.timetable-card.has-room .timetable-card-main-col .timetable-card-teacher {
+  margin-bottom: 0;
+}
+
+.timetable-card.has-room .timetable-card-room-col .timetable-card-room {
+  display: block;
+  background: none;
+  padding: 0;
+  margin-top: 0;
+  font-weight: 600;
+  word-break: break-word;
 }
 
 /* Drag hover highlights */
