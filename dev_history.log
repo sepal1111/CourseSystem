@@ -1,3 +1,124 @@
+## [2026-08-13 18:20:00] - [Self-Correction / Bugfix] 修正「清空所有紀錄」按鈕因 Electron 不支援 window.prompt() 而完全無效
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 清空紀錄的功能無效
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   追查後定位到根因：前次為強化「清空所有紀錄」的危險操作確認機制，將原本的 `confirm()` 改為要求輸入「清空」二字的 `window.prompt()`。但 Electron 的 renderer process 對 `window.prompt()` 的支援並不可靠（這是 Electron 社群長期已知的限制，與 `window.alert()`／`window.confirm()` 穩定支援的情況不同），實際執行時可能完全不顯示對話框、或直接回傳 `null`，導致整個清空流程在使用者眼中「完全無反應」，與回報現象吻合。這也是整個程式碼庫中唯一一處使用 `window.prompt()` 的地方（其餘 58 處危險/確認操作皆使用穩定可靠的 `alert()`／`confirm()`），風險特徵明確。
+    *   修正方式：不再依賴任何原生 `prompt()` 對話框，改用應用程式既有、已在全站廣泛驗證可正常運作的自訂 Modal 系統，新增 `#modal-confirm-clear-data`：顯示動態的教師/班級筆數警示文字、提供文字輸入框要求輸入「清空」、確認按鈕在輸入內容不符前保持 `disabled` 狀態（新增 `.btn:disabled` 樣式讓停用狀態視覺上更明確），輸入正確後按鈕才會啟用，支援按 Enter 鍵觸發確認（於按鈕已啟用時）。
+    *   已以 Node VM 直接執行 `app.js` 中該段事件綁定的實際原始碼驗證：點擊「清空所有紀錄」正確開啟對話框並重置輸入框與確認按鈕狀態、警示文字正確反映當前教師/班級實際筆數、輸入非「清空」文字時確認按鈕維持停用、輸入正確文字後按鈕正確啟用、點擊已啟用的確認按鈕正確清空 `state`、Enter 鍵僅在按鈕已啟用時才會觸發確認，共 5 項情境全數通過；並以「比對所有 getElementById() 呼叫是否都能在 index.html 找到對應 id」的全面掃描與 HTML 標籤開合計數，確認新增的 Modal 結構正確無誤。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 新增 `#modal-confirm-clear-data` 自訂確認對話框，取代原本的 `window.prompt()`。
+    *   `[MODIFIED]` `app.js`: 「清空所有紀錄」按鈕改為開啟自訂 Modal 並綁定輸入驗證、確認、Enter 鍵觸發等邏輯。
+    *   `[MODIFIED]` `style.css`: 新增 `.btn:disabled` 樣式，讓確認按鈕的停用狀態視覺上更明確。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次清空功能失效之錯誤修復歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-13 18:05:00] - [Self-Correction / Bugfix] 修正匯入班級清單時「班級名稱」被誤判為「班級ID」欄位，導致名稱直接取用ID
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 匯入班級清單中，班級名稱欄位沒有匯入，是直接取用了班級ID
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   以官方範本表頭「班級ID,班級名稱,年級」實際重現問題，定位到 `data.js` 的 `parseClassCSV()` 表頭欄位偵測邏輯：`nameCol` 是用 `h.includes("班級")` 判斷該欄是否為名稱欄，但表頭第 0 欄「班級ID」本身就包含「班級」這個子字串，導致 `findIndex` 從左掃描時，在第 0 欄（其實是 ID 欄）就先被誤判命中為名稱欄，使得 `nameIdx` 被設成與 `idIdx` 相同的索引（都是 0）——因此匯入時 `row[nameIdx]` 實際讀到的值等於 `row[idIdx]`，也就是名稱欄的值直接變成了班級 ID，與使用者回報現象完全吻合。
+    *   修正方式：`nameCol`／`gradeCol` 的欄位搜尋新增 `idx !== idCol` 排除條件，避免已經被判定為 ID 欄的欄位又被名稱/年級欄的關鍵字（「班級」「年」等較寬鬆的子字串）二次誤判命中。此修正對欄位順序、是否有「班級」字樣重複出現在 ID 欄中皆具備一般性，不侷限於官方範本的特定表頭寫法。
+    *   已以 Node 直接執行 `parseClassCSV()` 實際原始碼驗證 4 種情境：官方範本原始表頭與資料（重現使用者回報的確切情境）now 正確解析出獨立的班級名稱、欄位順序調換（名稱欄在前、ID欄在後）仍正確解析、不含「班級」字樣的簡化表頭（ID,名稱,年級）維持原本正確行為未受影響、無表頭（headerless）情境不受影響——共 4 項情境全數通過。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `data.js`: 修正 `parseClassCSV()` 表頭欄位偵測邏輯，`nameCol`／`gradeCol` 搜尋時排除已判定為 `idCol` 的欄位索引。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次班級匯入名稱欄位誤判之錯誤修復歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-13 17:50:00] - 新增「匯入專科教室」Excel/CSV 功能與範本下載，補齊四大類資料的匯入範本
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 在系統中，要提供以下的範本：匯入班級、匯入教師、匯入科目、匯入專科教室
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   盤點後發現「匯入班級」「匯入教師」「匯入科目」三者皆已具備完整的批次匯入功能（拖曳/選檔→解析預覽→確認寫入）與對應的範本下載按鈕，唯獨「專科教室」完全沒有批次匯入管道——教室只能透過「新增專科教室」逐筆手動建立，或依附在科目匯入的「特殊教室」欄位被動自動建立，缺乏獨立、直接的匯入方式。單純提供一個範本檔而沒有對應的匯入功能沒有意義，因此本次同步補上完整的「匯入專科教室」功能，比照另外三者的既有架構。
+    *   `data.js` 新增 `parseRoomCSV()`，CSV 欄位為「代碼/簡稱,教室全稱,同時段容納上限」，比照既有 `parseTeacherCSV`／`parseClassCSV`／`parseSubjectCSV` 的欄位自動偵測與無表頭容錯邏輯；容量上限缺漏或非法時預設為 1 班。
+    *   `index.html`：於「班級與專科教室」子頁的專科教室面板標題列新增「匯入專科教室 Excel / CSV」按鈕與檔案選取器；新增 `#modal-room-import-confirm` 確認匯入對話框（比照 class/subject 匯入預覽 modal 樣式）；範本下載區塊新增第 5 個按鈕「專科教室名單範本」，與既有 4 個範本按鈕並列。
+    *   `app.js` 新增 `processRoomCSVFile()`／`showRoomCSVPreviewModal()`／`handleRoomCSVSelect()`／`downloadRoomCSVTemplate()`，完全比照既有三者的實作模式：確認匯入時若代碼已存在則更新名稱與容量上限、但保留該教室既有的「禁止排課時段」設定（因為 CSV 欄位不含此資訊，直接覆蓋會誤刪使用者先前手動設定的禁排時段）；若為全新代碼則以空陣列初始化。
+    *   已以 Node 直接匯入 `data.js`／VM 執行 `app.js` 實際原始碼驗證：`parseRoomCSV()` 有表頭/無表頭兩種格式皆正確解析、容量上限缺漏時正確預設為 1；確認匯入流程正確合併寫入 `state.rooms`，且對已存在的教室代碼重新匯入時，原有的禁止排課時段設定不會被清空，新教室則正確初始化為空陣列。並以「比對 app.js 所有 getElementById() 呼叫是否都能在 index.html 找到對應 id」的全面掃描與 HTML 標籤開合計數，確認本次新增的所有元件與 modal 皆正確對應、無結構性錯誤。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `data.js`: 新增 `parseRoomCSV()`。
+    *   `[MODIFIED]` `index.html`: 專科教室面板新增匯入按鈕與檔案選取器、新增 `#modal-room-import-confirm` 確認匯入對話框、範本下載區塊新增「專科教室名單範本」按鈕。
+    *   `[MODIFIED]` `app.js`: 新增 `processRoomCSVFile()`／`showRoomCSVPreviewModal()`／`handleRoomCSVSelect()`／`downloadRoomCSVTemplate()` 並完成事件綁定。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次新增專科教室匯入功能與範本開發歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-13 17:30:00] - 科目「領域」建議清單改為完全依實際資料動態產生，移除內建預設領域
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 科目的領域不要內建，由匯入的文件或是管理員手動新增
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   前次新增「領域」欄位時，於科目 Modal 的 `<datalist>` 內建了 8 個預設領域選項（語文、數學、社會、自然科學、藝術、健康與體育、綜合活動、科技），這些是台灣 108 課綱常見領域名稱，但屬於工程師自行預設、未經使用者要求的內建假設，與該校實際匯入資料或管理員自訂的命名慣例可能不一致。
+    *   移除 `index.html` 中 `<datalist id="subject-domain-suggestions">` 內寫死的 8 個 `<option>`，改為空容器；`app.js` 的 `openSubjectModal()` 新增動態產生邏輯：每次開啟科目 Modal 時，即時掃描 `state.subjects` 中所有科目已設定過的 `domain` 值（不論是透過匯入 CSV/Excel 或手動輸入而來），去重排序後填入建議清單。如此一來，輸入框仍保有「打字自動建議」的便利性，但建議內容完全反映該校自己曾經使用過的領域名稱，不會被引導套用一組非本校選用的預設分類。
+    *   已以 Node VM 直接執行 `openSubjectModal()` 原始碼驗證：科目資料含「自然科學」「語文」兩種領域時，建議清單僅列出這兩項（不含舊版內建的健康與體育、科技、綜合活動等）；尚無任何科目設定領域時，建議清單為空、不會預先帶入任何選項。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `index.html`: 移除科目 Modal 領域欄位 `<datalist>` 內建的 8 個預設選項。
+    *   `[MODIFIED]` `app.js`: `openSubjectModal()` 新增依 `state.subjects` 實際資料動態產生領域建議清單的邏輯。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次移除內建領域預設值的調整歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-13 17:15:00] - 連排規則改為管理員逐科目設定，並新增科目「領域」標註影響同天排課判斷
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 重新檢視連排的規定，改為由管理員指定哪些科目要連排以及連排的方式，另外科目中增加領域標註，只要是領域相同的科目，就要視為需要考量是否同天或是連排設定
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   原本 `scheduler.js` 的強制連排規則完全寫死於程式碼中（`FORCED_DOUBLE_SUBJECTS = ["自然","社會"]`、`FORCED_CONNECT_HIGH_GRADE_ENGLISH_SUBJECTS = ["英語","英文","彈(英)"]`），且僅支援「每週3節→2節連排+1節異日」與「高年級每週2節→兩節都連排」兩種寫死情境；「高年級英文/彈(英)不同天」也是另一條完全獨立、寫死科目名稱的硬性規則。這些都與使用者這次的需求方向（改為管理員可設定）相衝突，故整段重寫。
+    *   `data.js` 的科目資料結構新增兩個欄位：`domain`（領域，自由文字，於「科目設定管理」表單以 datalist 提供常見選項如語文/數學/社會/自然科學/藝術/健康與體育/綜合活動/科技）、`connectMode`（連排方式：`none` 不連排／`full` 每週節數全部連續排在同一天／`partial` 2節連排＋其餘節數分散於不同天，需每週節數≥3）。`parseSubjectCSV()` 同步支援「領域」「連排方式」CSV 欄位解析（含中文值對應），CSV 範本與匯入預覽表格一併更新。
+    *   `scheduler.js` 新增 `getSubjectConfig(classId, subjectName)`，依 `state.subjects`（透過新增的 `params.subjects` 傳入）以 `${grade}-${subjectName}` 為 key 查詢每個科目的領域與連排方式設定；`getConnectMode(assign)` 取代原本寫死的 `getForcedConnectPattern()`，若配課已被手動鎖定固定時段則優先尊重鎖定、忽略連排設定。
+    *   將原本僅支援「2 節」區塊的 `isValidDoubleBlock`/`getSortedDoubleBlockSlots` 泛化為 `isValidBlock`/`getSortedBlockSlots`（可指定任意 `blockSize`），並新增 `getValidBlockStarts(blockSize)` 依午休（第4-5節間）自動計算合法起始節次。連排 token 產生邏輯同步泛化：`connectMode==='full'` 產生單一「整週節數」大小的區塊（不再限制只能是2節）；`connectMode==='partial'` 產生「1個2節區塊＋(週節數-2)個獨立單堂」，每個獨立單堂與區塊皆需落在不同天（沿用既有 Constraint 8，該約束原本就已泛化支援任意數量的同 `assignmentId` token，不需額外修改）。
+    *   `isValid()` 的 Constraint 6（原「同一科目每日上限節數」）泛化為「同一科目、或領域相同的不同科目，每日合計上限節數」：檢查候選時段當天已排課程時，若科目名稱相同或（雙方皆有設定且）領域相同即列入計數。原本獨立的 Constraint 7（高年級英文/彈英不同天）整條移除——只要管理員將「英文」與「彈(英)」都標註為同一領域，即可用同一套機制達成同等（甚至更彈性，因為上限節數可調整）的效果。`getSortedSlotsForLesson()` 的軟性「優先連排」偏好啟發式（H3）也從原本的寫死科目清單改為讀取 `connectMode !== 'none'` 判斷。
+    *   `validateManualMove()`（課表拖拉調整）同步新增 `subjects` 參數並比照泛化 Constraint 5（同一天上限節數，含領域聯集計算），移除原本寫死的高年級英文/彈英同天檢查。
+    *   對應調整「自動排課引擎」頁面：移除「限制：高年級英文與彈(英)不得排在同一天」「限制：自然/社會與高年級英語系科目強制連排」兩個勾選框（功能已下放到科目層級設定），並更新「同一科目同一天上限節數」欄位說明文字，改為引導使用者至「科目設定管理」逐科目設定領域與連排方式。
+    *   `app.js`：新增/編輯科目 Modal 新增「領域」輸入框（含常見領域 datalist）與「連排方式」下拉選單；科目清單表格新增對應兩欄顯示；`startSchedulingEngine()` 呼叫 `runScheduler()` 時新增傳入 `subjects: state.subjects`；兩處 `validateManualMove()` 呼叫點新增傳入 `state.subjects`。
+    *   驗證過程中，透過「比對 app.js 中所有 `getElementById()` 呼叫是否都能在 index.html 找到對應 id」的全面掃描，額外揪出一個原本會導致整個應用程式在啟動時崩潰的錯誤：先前用於即時儲存排課設定的事件綁定清單仍列出已被本次移除的兩個 checkbox id（`engine-enforce-english-separation`／`engine-enforce-forced-connect`），若不修正，`document.getElementById(id).addEventListener(...)` 會在頁面載入時對 `null` 呼叫方法而拋出例外、中斷後續所有初始化邏輯；已一併移除清單中的失效項目並修正。
+    *   已以 Node 直接匯入 `scheduler.js`／`data.js` 執行實際原始碼驗證：`full` 模式週2節／週3節（新泛化能力）皆正確整段連排、`partial` 模式週3節（對應舊版 double-single）與週4節（新泛化能力）皆正確產生「2節連排＋其餘節數分散不同天」、`none` 模式維持原本不強制連排的基準行為、兩個不同科目共用領域時的每日上限聯合計算正確、手動鎖定時段會正確蓋過連排設定、`validateManualMove` 的領域聯合上限判斷正確；另以 VM 直接執行 `parseSubjectCSV`／`openSubjectModal`／`handleSubjectFormSubmit` 驗證領域與連排方式欄位的 CSV 解析與 Modal 讀寫皆正確存取，共 10+ 項情境全數通過。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `data.js`: 新增 `CONNECT_MODES`、`parseSubjectCSV()` 支援領域/連排方式欄位解析；`DEFAULT_ENGINE_SETTINGS` 移除已下放至科目層級的兩個設定。
+    *   `[MODIFIED]` `scheduler.js`: 新增 `getSubjectConfig()`／`getConnectMode()`；連排 token 產生邏輯與區塊排課機制（`isValidBlock`／`getSortedBlockSlots`／`getValidBlockStarts`／`solve()`）泛化為支援任意連排大小；`isValid()` Constraint 6 泛化為領域感知的每日上限、移除舊有 Constraint 7；H3 軟性連排偏好改讀 `connectMode`；`validateManualMove()` 新增 `subjects` 參數並同步泛化每日上限判斷。
+    *   `[MODIFIED]` `index.html`: 科目 Modal 新增領域輸入與連排方式下拉選單；科目清單表格與 CSV 匯入預覽表格新增對應欄位；Engine 頁移除兩個已下放的勾選框並更新說明文字。
+    *   `[MODIFIED]` `app.js`: 科目 Modal 讀寫邏輯新增領域/連排方式；科目清單渲染新增對應欄位；`startSchedulingEngine()`／`validateManualMove()` 呼叫點傳入 `state.subjects`；修正即時儲存排課設定的事件綁定清單中已失效的 element id（潛在啟動崩潰錯誤）。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次連排規則管理員化與領域標註功能開發歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-13 16:00:00] - 全站易用性改造：課表依科目上色＋圖例、進階區塊收合、假資料修正、空狀態與確認機制強化
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 檢視所有的操作介面與步驟，要以簡單易用的方式進行改造，並且課表檢視部分要顯示得更清楚易懂
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   需求範圍橫跨全部 5 個分頁，先派出 Explore 子代理對全站進行 UI/UX 稽核，列出具體問題與工作量分級，再以 AskUserQuestion 與使用者確認本次要做到「快速改善＋課表配色圖例」的範圍（略過教師下拉選單改自訂 combobox、全站 toast 通知系統等大型重構），避免方向錯誤導致大量工作報廢。
+    *   **課表檢視核心問題**：稽核發現三種檢視模式（班級/教師/專科教室）完全沒有依科目上色，只用「導師課＝藍、其他課＝綠」兩色區分，體育、音樂、美術、電腦等所有科任課顏色相同，且整個 Viewer 分頁沒有任何圖例。依 `dataviz` skill 的分類色彩方法論，於 `data.js` 新增 `getSubjectColorHue()`：常見科目（國語/數學/社會/自然/英語系/音樂/美勞/體育健康）有直覺的手動配色，其餘科目以字串雜湊穩定映射到同一組 8 色（來自已驗證的色盲安全分類色票），確保同一科目每次都顯示相同顏色；由於卡片上恆有科目文字，顏色僅作為輔助辨識，不需承擔唯一識別責任。`app.js` 的 `renderClassCell`／`renderTeacherCell`／`renderRoomCell` 改用此色彩系統取代原本以教師身分決定顏色的 `getTeacherColorClass()`（已移除，不再使用）；新增 `renderTimetableLegend()` 依「全校課表」（而非目前選取的單一班級/教師/教室）匯總出現過的科目色塊圖例，確保切換檢視目標時圖例顏色意義不會跳動，並附上「已鎖定固定時段」「教師不可排課」兩個特殊狀態圖例。
+    *   **檢視維度切換**：原本的 `<select>` 下拉選單改為分段式按鈕（沿用 `book-open`/`users`/`map-pin` icon 與更白話的「班級課表／教師課表／專科教室課表」文案），按鈕點擊時同步操作一個視覺隱藏的 `#viewer-dimension` select 並觸發 `change` 事件，讓既有依賴該 select 值的渲染邏輯完全不需更動、風險最低。切到教師/教室模式時，原本會直接隱藏的操作提示改為顯示「目前為僅供檢視模式...」的說明，避免使用者誤以為拖曳沒反應是系統故障；並在課表上方新增 `#timetable-title` 大標題（如「101 班 課表」），脫離下拉選單畫面（如列印、截圖）時仍可辨識是哪張課表。
+    *   **列印**：`style.css` 新增 `@media print` 樣式，隱藏側邊欄/頂部列/操作列，強制課表區塊改為白底黑字並以 `print-color-adjust: exact` 保留科目色塊，避免深色玻璃介面直接印出來一片昏暗或空白。
+    *   **進階功能收合**：「自動排課引擎」頁面的回溯次數/優化勾選/需求限制等 8 個控制項、與「線上互動配課」頁的「同年級課程鎖定工具」（低頻的本土語言拆班用途）皆包進原生 `<details>/<summary>` 摺疊區塊、預設收合，讓主要操作（啟動排課、逐科目選教師）不再被進階選項稀釋版面；`<details>` 內的表單元素即使收合仍可被 JS 正常讀寫，不影響既有邏輯。
+    *   **假資料與空狀態修正**：Dashboard「教師授課負擔統計」卡片中「編制基本數: 395 節」「鐘點教師補足: 34 節」查證後為寫死文字、從未被任何程式碼更新過，改為依 `state.teachers` 動態計算（編制基本數=非鐘點教師 baseHours 加總，鐘點教師補足=鐘點教師 assignedHours 加總）；「基本配課指標」卡片的「(除鐘點外)」註解因會被 `updateGlobalStats()` 動態文字整段覆蓋而形同虛設，改為獨立常駐的一行說明文字。教師清單、科目清單的空狀態文字統一區分「完全無資料」與「篩選無結果」兩種情境並給出對應引導；科目清單原本完全沒有空狀態處理（篩選為空時整個表格留白無提示），已補上。教師/班級/科目三個清單標題旁新增「共 N 筆」（或篩選時「顯示 X / Y 筆」）計數徽章。
+    *   **危險操作強化**：全域「清空所有紀錄」按鈕原本只需一次瀏覽器原生 `confirm()` 即可清空全校資料，改為 `prompt()` 要求輸入「清空」二字才會執行，並在提示文字中列出目前實際的教師/班級筆數，讓使用者更清楚了解操作影響範圍。
+    *   已以 Node VM 直接執行 `data.js`／`app.js` 內實際原始碼片段驗證：科目配色（含常見科目手動配色與未列出科目的穩定雜湊 fallback）、課程卡片色彩類別正確套用且舊有 role-based 樣式已完全移除、課表大標題依三種維度正確產生文字、圖例正確彙總全校課表科目與特殊狀態、清單計數徽章的「共N筆／顯示X/Y筆」邏輯、Dashboard 編制基本數與鐘點教師補足計算，共 10+ 項情境全數通過；並以文字比對確認所有新增/變更的 DOM ID 在 app.js 與 index.html 間完全對應，HTML 的 div/details/section/table 標籤開合數量平衡。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `data.js`: 新增 `getSubjectColorHue()` 與 `SUBJECT_COLOR_HUES` 科目配色系統。
+    *   `[MODIFIED]` `style.css`: 新增科目分類色彩 CSS 變數與卡片樣式、課表圖例樣式、`<details>` 摺疊樣式、分段按鈕樣式、教師負擔清單可點擊提示樣式、`@media print` 列印樣式；移除已棄用的 `role-homeroom`/`role-other` 樣式。
+    *   `[MODIFIED]` `index.html`: Viewer 分頁新增分段式維度切換按鈕、課表圖例容器、大標題；Engine／Assignments 分頁進階區塊改為 `<details>` 摺疊；Dashboard 標題白話化與假資料徽章補上 ID；教師/班級/科目清單標題新增計數徽章容器。
+    *   `[MODIFIED]` `app.js`: 新增 `renderTimetableLegend()`／`updateTimetableTitle()`／`updateTimetableAlertMessage()`／`updateListCountBadge()`；`renderClassCell`／`renderTeacherCell`／`renderRoomCell` 改用科目配色；移除 `getTeacherColorClass()`；`renderDashboardView()` 新增動態計算編制基本數/鐘點教師補足；`renderTeachersTable()`／`renderSubjects()`／`renderClassesAndRooms()` 補上空狀態文字區分與計數徽章；「清空所有紀錄」改為輸入文字確認。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次全站易用性改造歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
 ## [2026-08-13 14:45:00] - 儀表板「系統基本規格矩陣」改為依實際資料動態計算，不再顯示固定範例校數字
 
 *   **使用者提示詞 / 需求 (User Prompt):**

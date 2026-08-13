@@ -7,12 +7,14 @@ import {
   loadAppState, 
   getInitialState, 
   validateAssignments, 
-  parseTeacherCSV, 
-  parseClassCSV, 
+  parseTeacherCSV,
+  parseClassCSV,
   parseSubjectCSV,
+  parseRoomCSV,
   DEFAULT_ROOMS,
   SPECIAL_ROOMS,
-  DEFAULT_ENGINE_SETTINGS
+  DEFAULT_ENGINE_SETTINGS,
+  getSubjectColorHue
 } from './data.js';
 
 import { 
@@ -137,13 +139,42 @@ document.addEventListener("DOMContentLoaded", () => {
   importFileBtn.addEventListener("click", () => importFileInput.click());
   importFileInput.addEventListener("change", importSystemData);
 
+  // This wipes every teacher/class/subject/assignment/schedule with no undo,
+  // so a plain OK/Cancel confirm() is too easy to click through by habit -
+  // require typing a confirmation word before it proceeds. Uses the app's
+  // own modal (not window.prompt(), which Electron does not reliably
+  // support - it silently no-ops in this app's renderer, making the
+  // clear-data button appear completely broken).
   document.getElementById("btn-clear-all-data").addEventListener("click", () => {
-    if (confirm("確定要清空瀏覽器暫存的所有資料嗎？這將會清除全校的所有教師、班級、科目設定與排課表紀錄！")) {
-      state = getInitialState();
-      saveAppState(state);
-      renderCurrentTab();
-      showConsoleLog("已清空瀏覽器中的所有暫存紀錄。");
-    }
+    const teacherCount = state.teachers.length;
+    const classCount = state.classes.length;
+    document.getElementById("confirm-clear-data-message").textContent =
+      `此操作將清空全校所有教師 (${teacherCount} 位)、班級 (${classCount} 班)、科目、配課與排課表紀錄，且無法復原！`;
+
+    const input = document.getElementById("confirm-clear-data-input");
+    input.value = "";
+    document.getElementById("btn-confirm-clear-data").disabled = true;
+
+    document.getElementById("modal-confirm-clear-data").classList.add("open");
+    input.focus();
+  });
+
+  const confirmClearInput = document.getElementById("confirm-clear-data-input");
+  const confirmClearBtn = document.getElementById("btn-confirm-clear-data");
+  confirmClearInput.addEventListener("input", () => {
+    confirmClearBtn.disabled = confirmClearInput.value.trim() !== "清空";
+  });
+  confirmClearInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !confirmClearBtn.disabled) confirmClearBtn.click();
+  });
+
+  confirmClearBtn.addEventListener("click", () => {
+    if (confirmClearInput.value.trim() !== "清空") return; // defensive: button should already be disabled
+    state = getInitialState();
+    saveAppState(state);
+    closeAllModals();
+    renderCurrentTab();
+    showConsoleLog("已清空瀏覽器中的所有暫存紀錄。");
   });
 
   // Settings Handlers: Tab Sub buttons
@@ -207,10 +238,24 @@ document.addEventListener("DOMContentLoaded", () => {
     formRoom.addEventListener("submit", handleRoomFormSubmit);
   }
 
+  // Room CSV import handler
+  const roomCsvBtn = document.getElementById("btn-import-room");
+  const roomCsvInput = document.getElementById("room-csv-file-input");
+  if (roomCsvBtn && roomCsvInput) {
+    roomCsvBtn.addEventListener("click", () => roomCsvInput.click());
+    roomCsvInput.addEventListener("change", handleRoomCSVSelect);
+  }
+
   // Subject template download button
   const downloadSubjectTmplBtn = document.getElementById("btn-download-subject-tmpl");
   if (downloadSubjectTmplBtn) {
     downloadSubjectTmplBtn.addEventListener("click", () => downloadSubjectCSVTemplate());
+  }
+
+  // Room template download button
+  const downloadRoomTmplBtn = document.getElementById("btn-download-room-tmpl");
+  if (downloadRoomTmplBtn) {
+    downloadRoomTmplBtn.addEventListener("click", () => downloadRoomCSVTemplate());
   }
 
   // Search subject filter event
@@ -357,7 +402,7 @@ document.addEventListener("DOMContentLoaded", () => {
   [
     "engine-max-backtracks", "engine-prefer-morning-core", "engine-prefer-consecutive-special",
     "engine-max-same-subject-per-day", "engine-max-teacher-weekly-hours", "engine-homeroom-min-free-periods",
-    "engine-enforce-english-separation", "engine-enforce-forced-connect", "engine-prefer-director-half-day"
+    "engine-prefer-director-half-day"
   ].forEach(id => {
     document.getElementById(id).addEventListener("change", () => {
       state.engineSettings = readEngineSettingsForm();
@@ -369,6 +414,21 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("viewer-dimension").addEventListener("change", handleViewerDimensionChange);
   document.getElementById("viewer-target-select").addEventListener("change", () => {
     renderTimetableGrid();
+  });
+
+  // Segmented dimension-switch buttons drive the hidden #viewer-dimension
+  // select (so the existing dimension-keyed render logic is untouched) and
+  // mirror the active state visually.
+  document.querySelectorAll(".viewer-dimension-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const dimension = btn.getAttribute("data-dimension");
+      document.querySelectorAll(".viewer-dimension-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      const dimensionSelect = document.getElementById("viewer-dimension");
+      dimensionSelect.value = dimension;
+      dimensionSelect.dispatchEvent(new Event("change"));
+    });
   });
   document.getElementById("btn-export-excel").addEventListener("click", exportTimetableToExcel);
   document.getElementById("btn-print-timetable").addEventListener("click", () => {
@@ -559,6 +619,19 @@ function renderDashboardSpecMatrix() {
 function renderDashboardView() {
   renderDashboardSpecMatrix();
 
+  // 編制基本數: total contracted base hours of non-hourly staff.
+  // 鐘點教師補足: total hours actually covered by hourly/part-time teachers.
+  const establishmentHours = state.teachers
+    .filter(t => t.role !== 'hourly')
+    .reduce((sum, t) => sum + (t.baseHours || 0), 0);
+  const hourlyHours = state.teachers
+    .filter(t => t.role === 'hourly')
+    .reduce((sum, t) => sum + (t.assignedHours || 0), 0);
+  const establishmentEl = document.getElementById("stat-establishment-hours");
+  const hourlyEl = document.getElementById("stat-hourly-hours");
+  if (establishmentEl) establishmentEl.textContent = `編制基本數: ${establishmentHours} 節`;
+  if (hourlyEl) hourlyEl.textContent = `鐘點教師補足: ${hourlyHours} 節`;
+
   const container = document.getElementById("dashboard-teacher-loads");
   if (!container) return;
 
@@ -625,6 +698,17 @@ function renderDashboardView() {
 // ----------------------------------------------------
 // SETTINGS FUNCTIONS (TEACHERS & CLASSES)
 // ----------------------------------------------------
+/**
+ * Updates a "共 N 筆" list-count badge, or "顯示 X / Y 筆" when a search
+ * filter is actively narrowing the list, so users can tell data is loaded
+ * without having to count table rows themselves.
+ */
+function updateListCountBadge(elementId, shownCount, totalCount) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  el.textContent = shownCount === totalCount ? `共 ${totalCount} 筆` : `顯示 ${shownCount} / ${totalCount} 筆`;
+}
+
 function renderTeachersTable(filterQuery = "") {
   const tbody = document.getElementById("teacher-list-tbody");
   if (!tbody) return;
@@ -643,7 +727,11 @@ function renderTeachersTable(filterQuery = "") {
   });
 
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-secondary);">沒有符合條件的教師資料</td></tr>`;
+    const emptyText = state.teachers.length === 0
+      ? "尚無教師資料，請點擊右上角「手動新增教師」或使用「Excel / CSV 批次匯入」建立教師名單"
+      : "查無符合搜尋條件的教師，請確認姓名/職務/編號拼寫";
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-secondary);">${emptyText}</td></tr>`;
+    updateListCountBadge("teacher-list-count", 0, state.teachers.length);
     return;
   }
 
@@ -721,6 +809,7 @@ function renderTeachersTable(filterQuery = "") {
     });
   });
 
+  updateListCountBadge("teacher-list-count", filtered.length, state.teachers.length);
   safeCreateIcons();
 }
 
@@ -754,7 +843,8 @@ function renderClassesAndRooms() {
     
     // Sort classes numerically
     const sortedClasses = [...state.classes].sort((a, b) => a.id.localeCompare(b.id));
-    
+    updateListCountBadge("class-list-count", sortedClasses.length, sortedClasses.length);
+
     if (sortedClasses.length === 0) {
       classContainer.innerHTML = `<div style="text-align: center; color: var(--text-secondary); width: 100%; padding: 2rem;">目前尚無班級資料，請點擊右上角手動新增班級。</div>`;
     } else {
@@ -1417,6 +1507,7 @@ function handleClassFormSubmit(e) {
 // ----------------------------------------------------
 let tempImportTeachers = []; // Holds list before saving
 let tempImportClasses = [];  // Holds list before saving
+let tempImportRooms = [];    // Holds list before saving
 
 function handleCSVSelect(e) {
   const file = e.target.files[0];
@@ -1429,6 +1520,13 @@ function handleClassCSVSelect(e) {
   const file = e.target.files[0];
   if (file) {
     processClassCSVFile(file);
+  }
+}
+
+function handleRoomCSVSelect(e) {
+  const file = e.target.files[0];
+  if (file) {
+    processRoomCSVFile(file);
   }
 }
 
@@ -1667,6 +1765,87 @@ function downloadClassCSVTemplate() {
   const a = document.createElement("a");
   a.href = url;
   a.setAttribute("download", "智慧排課_班級匯入範本.csv");
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function processRoomCSVFile(file) {
+  readFileAsCSVText(file, (err, text) => {
+    if (err) {
+      alert("讀取檔案出錯，請確認檔案格式是否正確。");
+      console.error(err);
+      return;
+    }
+    try {
+      tempImportRooms = parseRoomCSV(text);
+      if (tempImportRooms.length === 0) {
+        alert("無法從檔案解析出有效的專科教室名單。請檢查格式是否符合。");
+        return;
+      }
+      showRoomCSVPreviewModal();
+    } catch (err) {
+      alert("解析檔案內容出錯，請確認格式正確。");
+      console.error(err);
+    }
+  });
+}
+
+function showRoomCSVPreviewModal() {
+  const modal = document.getElementById("modal-room-import-confirm");
+  const tbody = document.getElementById("room-csv-preview-tbody");
+  tbody.innerHTML = "";
+
+  tempImportRooms.forEach(r => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${r.key}</strong></td>
+      <td>${r.name}</td>
+      <td>${r.limit} 班</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  modal.classList.add("open");
+
+  const confirmBtn = document.getElementById("btn-room-csv-confirm-save");
+  confirmBtn.onclick = function() {
+    if (!state.rooms) state.rooms = {};
+
+    tempImportRooms.forEach(newR => {
+      const existing = state.rooms[newR.key];
+      state.rooms[newR.key] = {
+        name: newR.name,
+        limit: newR.limit,
+        busySlots: existing?.busySlots || []
+      };
+    });
+
+    state.schedule = null;
+    saveAppState(state);
+    closeAllModals();
+    renderClassesAndRooms();
+    renderSubjects();
+    showConsoleLog(`成功批次匯入 ${tempImportRooms.length} 間專科教室設定，課表已重置。`);
+  };
+}
+
+function downloadRoomCSVTemplate() {
+  const header = "代碼/簡稱,教室全稱,同時段容納上限\n";
+  const rows = [
+    "電腦,電腦教室,1",
+    "體育,體育館,2",
+    "音樂,音樂教室,1",
+    "美勞,美勞教室,1"
+  ].join("\n");
+
+  const csvContent = "﻿" + header + rows;
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.setAttribute("download", "智慧排課_專科教室匯入範本.csv");
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -2692,8 +2871,6 @@ function populateEngineSettingsForm() {
   document.getElementById("engine-max-same-subject-per-day").value = settings.maxSameSubjectPerDay;
   document.getElementById("engine-max-teacher-weekly-hours").value = settings.maxTeacherWeeklyHours;
   document.getElementById("engine-homeroom-min-free-periods").value = settings.homeroomMinFreePeriods;
-  document.getElementById("engine-enforce-english-separation").checked = settings.enforceEnglishSeparation;
-  document.getElementById("engine-enforce-forced-connect").checked = settings.enforceForcedConnect;
   document.getElementById("engine-prefer-director-half-day").checked = settings.preferDirectorHalfDay;
 }
 
@@ -2711,8 +2888,6 @@ function readEngineSettingsForm() {
       const v = parseInt(document.getElementById("engine-homeroom-min-free-periods").value);
       return Number.isNaN(v) || v < 0 ? DEFAULT_ENGINE_SETTINGS.homeroomMinFreePeriods : v;
     })(),
-    enforceEnglishSeparation: document.getElementById("engine-enforce-english-separation").checked,
-    enforceForcedConnect: document.getElementById("engine-enforce-forced-connect").checked,
     preferDirectorHalfDay: document.getElementById("engine-prefer-director-half-day").checked
   };
 }
@@ -2796,7 +2971,7 @@ function startSchedulingEngine() {
         state.teachers,
         state.classes,
         state.assignments,
-        { ...engineSettings, rooms: state.rooms },
+        { ...engineSettings, rooms: state.rooms, subjects: state.subjects },
         showConsoleLog
       );
 
@@ -2881,21 +3056,105 @@ function renderViewersControls() {
     select.value = currentVal;
   }
 
+  updateTimetableAlertMessage();
+
   // Render the grid table
   renderTimetableGrid();
 }
 
 function handleViewerDimensionChange() {
-  const alertBox = document.getElementById("timetable-alert-box");
+  updateTimetableAlertMessage();
+  renderViewersControls();
+}
+
+/**
+ * Updates the info banner above the timetable to match the active dimension.
+ * Previously this note only appeared in class mode and was simply hidden
+ * otherwise, which could read as "the page is broken" when dragging a card in
+ * teacher/room mode did nothing - now it always explains what the current
+ * mode does, and is kept in sync on both dimension change and initial load.
+ */
+function updateTimetableAlertMessage() {
+  const alertMsg = document.getElementById("timetable-alert-message");
   const dimension = document.getElementById("viewer-dimension").value;
-  
-  if (dimension === "class") {
-    alertBox.style.display = "flex";
-  } else {
-    alertBox.style.display = "none";
+  if (!alertMsg) return;
+
+  alertMsg.textContent = dimension === "class"
+    ? "手動調整模式：點擊並拖曳課程方塊以調課。系統會自動驗證衝突。"
+    : "目前為僅供檢視模式，無法拖曳調整課程。如需調整課程，請切換回「班級課表」。";
+}
+
+/**
+ * Sets the large heading above the timetable (e.g. "101 班 課表") so the
+ * table is self-explanatory once separated from the dropdown selection above
+ * it - useful when printed, screenshotted, or scrolled past the controls.
+ */
+function updateTimetableTitle(dimension, targetId) {
+  const titleEl = document.getElementById("timetable-title");
+  if (!titleEl) return;
+
+  if (!targetId) {
+    titleEl.textContent = "";
+    return;
   }
 
-  renderViewersControls();
+  if (dimension === "class") {
+    const cls = state.classes.find(c => c.id === targetId);
+    titleEl.textContent = cls ? `${cls.name} 課表` : "";
+  } else if (dimension === "teacher") {
+    const t = state.teachers.find(x => x.id === targetId);
+    titleEl.textContent = t ? `${t.name} 老師 課表` : "";
+  } else if (dimension === "room") {
+    const room = (state.rooms || SPECIAL_ROOMS)[targetId];
+    titleEl.textContent = `${room?.name || targetId} 課表`;
+  }
+}
+
+/**
+ * Renders the subject color legend above the timetable, plus markers for
+ * locked/busy states. Computed from the whole school schedule (not just the
+ * currently-selected class/teacher/room) so the legend stays stable while
+ * switching between targets - the same color always means the same subject.
+ */
+function renderTimetableLegend() {
+  const container = document.getElementById("timetable-legend");
+  if (!container) return;
+
+  if (!state.schedule) {
+    container.innerHTML = "";
+    return;
+  }
+
+  const subjectsPresent = new Set();
+  Object.values(state.schedule).forEach(classSchedule => {
+    Object.values(classSchedule).forEach(cell => {
+      if (cell && cell.subject) subjectsPresent.add(cell.subject);
+    });
+  });
+
+  if (subjectsPresent.size === 0) {
+    container.innerHTML = "";
+    return;
+  }
+
+  const subjectSwatches = [...subjectsPresent].sort((a, b) => a.localeCompare(b)).map(subject => `
+    <div class="timetable-legend-item">
+      <span class="timetable-legend-swatch subject-hue-${getSubjectColorHue(subject)}" style="background-color: var(--subject-${getSubjectColorHue(subject)}); border-radius: 3px;"></span>
+      <span>${subject}</span>
+    </div>
+  `).join('');
+
+  container.innerHTML = `
+    ${subjectSwatches}
+    <div class="timetable-legend-item">
+      <span class="timetable-legend-swatch is-locked"></span>
+      <span>已鎖定固定時段</span>
+    </div>
+    <div class="timetable-legend-item">
+      <span class="timetable-legend-swatch is-busy"></span>
+      <span>教師不可排課 (會議/忙碌)</span>
+    </div>
+  `;
 }
 
 function renderTimetableGrid() {
@@ -2903,6 +3162,11 @@ function renderTimetableGrid() {
   if (!tbody) return;
 
   tbody.innerHTML = "";
+
+  const dimension = document.getElementById("viewer-dimension").value;
+  const targetId = document.getElementById("viewer-target-select").value;
+  updateTimetableTitle(dimension, targetId);
+  renderTimetableLegend();
 
   if (!state.schedule) {
     tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
@@ -2913,9 +3177,6 @@ function renderTimetableGrid() {
     return;
   }
 
-  const dimension = document.getElementById("viewer-dimension").value;
-  const targetId = document.getElementById("viewer-target-select").value;
-  
   if (!targetId) return;
 
   const periodsTiming = [
@@ -3019,7 +3280,7 @@ function renderClassCell(td, classId, day, period) {
     const teacher = state.teachers.find(t => t.id === cell.teacherId);
     const teacherName = teacher ? teacher.name : cell.teacherId;
     const roomNameStr = cell.requiresRoom ? ((state.rooms || SPECIAL_ROOMS)[cell.requiresRoom]?.name || cell.requiresRoom) : '';
-    const colorClass = getTeacherColorClass(cell.teacherId);
+    const colorClass = `subject-hue-${getSubjectColorHue(cell.subject)}`;
     const isLocked = Boolean(cell.locked);
     const lockIconHtml = isLocked ? '<i data-lucide="lock" class="timetable-card-lock-icon"></i>' : '';
 
@@ -3048,15 +3309,6 @@ function renderClassCell(td, classId, day, period) {
       </div>
     `;
   }
-}
-
-/**
- * Course card color by teacher role: homeroom teachers' own classes are
- * light blue, everyone else's (subject/director/leader/hourly) are light green.
- */
-function getTeacherColorClass(teacherId) {
-  const t = state.teachers.find(x => x.id === teacherId);
-  return (t && t.role === 'homeroom') ? 'role-homeroom' : 'role-other';
 }
 
 function renderTeacherCell(td, teacherId, day, period) {
@@ -3092,6 +3344,7 @@ function renderTeacherCell(td, teacherId, day, period) {
 
   if (assignedClassId) {
     const roomNameStr = room ? ((state.rooms || SPECIAL_ROOMS)[room]?.name || room) : '';
+    const colorClass = `subject-hue-${getSubjectColorHue(subject)}`;
 
     // Split layout (70% class/subject | 30% room, all centered) when a
     // special room is assigned; otherwise the original stacked layout.
@@ -3109,7 +3362,7 @@ function renderTeacherCell(td, teacherId, day, period) {
       `;
 
     td.innerHTML = `
-      <div class="timetable-card ${room ? 'has-room' : ''}" style="border-left-color: var(--success-color); background-color: var(--success-bg);">
+      <div class="timetable-card ${room ? 'has-room' : ''} ${colorClass}">
         ${innerHtml}
       </div>
     `;
@@ -3131,8 +3384,9 @@ function renderRoomCell(td, roomKey, day, period) {
   if (occupiedClasses.length > 0) {
     let content = "";
     occupiedClasses.forEach(oc => {
+      const colorClass = `subject-hue-${getSubjectColorHue(oc.subject)}`;
       content += `
-        <div class="timetable-card" style="border-left-color: var(--info-color); background-color: var(--info-bg); height: auto; margin-bottom: 2px;">
+        <div class="timetable-card ${colorClass}" style="height: auto; margin-bottom: 2px;">
           <span class="timetable-card-subject">${oc.classId} 班</span>
           <span class="timetable-card-teacher">${oc.subject} (${oc.teacherName})</span>
         </div>
@@ -3216,7 +3470,8 @@ function enableDragAndDropEvents(classId) {
         lesson,
         showConsoleLog,
         state.rooms,
-        state.engineSettings
+        state.engineSettings,
+        state.subjects
       );
 
       cell.classList.remove("drop-allowed", "drop-conflict");
@@ -3264,7 +3519,8 @@ function enableDragAndDropEvents(classId) {
         lesson,
         showConsoleLog,
         state.rooms,
-        state.engineSettings
+        state.engineSettings,
+        state.subjects
       );
 
       if (check.valid) {
@@ -3542,8 +3798,21 @@ function renderSubjects() {
 
   filtered.sort((a, b) => a.grade - b.grade || a.subject.localeCompare(b.subject));
 
+  updateListCountBadge("subject-list-count", filtered.length, state.subjects.length);
+
+  if (filtered.length === 0) {
+    const emptyText = state.subjects.length === 0
+      ? "尚無科目資料，請點擊右上角「手動新增科目」或使用「匯入科目 Excel / CSV」建立科目清單"
+      : "查無符合搜尋條件的科目，請確認科目名稱/年級拼寫";
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-secondary);">${emptyText}</td></tr>`;
+    return;
+  }
+
+  const connectModeLabels = { none: '不連排', full: '全部連排', partial: '2節連排+分散' };
+
   filtered.forEach(s => {
     const isHomeroom = Boolean(s.isHomeroomMain);
+    const connectMode = s.connectMode || 'none';
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -3556,6 +3825,8 @@ function renderSubjects() {
         </button>
       </td>
       <td>${s.requiresRoom ? `<span class="badge badge-primary">${s.requiresRoom}教室</span>` : '無'}</td>
+      <td>${s.domain ? `<span class="badge badge-secondary">${s.domain}</span>` : '—'}</td>
+      <td>${connectMode !== 'none' ? `<span class="badge badge-info">${connectModeLabels[connectMode]}</span>` : '—'}</td>
       <td>
         <button class="btn-edit-subject btn-secondary btn-icon-only mr-1" data-id="${s.id}" title="編輯科目">
           <i data-lucide="edit-3" style="width: 16px; height: 16px;"></i>
@@ -3642,7 +3913,18 @@ function openSubjectModal(subjectId = null) {
     });
   }
 
+  // Domain suggestions are never built-in - only names already in use (from
+  // manual entry or file import) are offered, so the list reflects whatever
+  // naming convention this school's own data actually uses.
+  const domainSuggestions = document.getElementById("subject-domain-suggestions");
+  if (domainSuggestions) {
+    const usedDomains = [...new Set(state.subjects.map(s => s.domain).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    domainSuggestions.innerHTML = usedDomains.map(d => `<option value="${d}"></option>`).join('');
+  }
+
   const sub = subjectId ? state.subjects.find(s => s.id === subjectId) : null;
+  const domainInput = document.getElementById("subject-domain");
+  const connectModeSelect = document.getElementById("subject-connect-mode");
 
   if (sub) {
     if (title) title.textContent = `編輯科目: ${sub.grade}年級 ${sub.subject}`;
@@ -3653,10 +3935,14 @@ function openSubjectModal(subjectId = null) {
     document.getElementById("subject-hours").value = sub.weeklyHours;
     if (roomSelect) roomSelect.value = sub.requiresRoom || "";
     if (isHomeroomCb) isHomeroomCb.checked = Boolean(sub.isHomeroomMain);
+    if (domainInput) domainInput.value = sub.domain || "";
+    if (connectModeSelect) connectModeSelect.value = sub.connectMode || "none";
   } else {
     if (title) title.textContent = "手動新增科目";
     if (actionInput) actionInput.value = "create";
     if (oldIdInput) oldIdInput.value = "";
+    if (domainInput) domainInput.value = "";
+    if (connectModeSelect) connectModeSelect.value = "none";
   }
 
   modal.classList.add("open");
@@ -3675,6 +3961,8 @@ function handleSubjectFormSubmit(e) {
   const room = rawRoom ? ensureRoomExists(rawRoom) : null;
   const isHomeroomCb = document.getElementById("subject-is-homeroom");
   const isHomeroomMain = isHomeroomCb ? isHomeroomCb.checked : true;
+  const domain = document.getElementById("subject-domain")?.value.trim() || null;
+  const connectMode = document.getElementById("subject-connect-mode")?.value || "none";
 
   if (!name || isNaN(grade) || isNaN(hours)) return;
 
@@ -3700,6 +3988,8 @@ function handleSubjectFormSubmit(e) {
     sub.weeklyHours = hours;
     sub.requiresRoom = room;
     sub.isHomeroomMain = isHomeroomMain;
+    sub.domain = domain;
+    sub.connectMode = connectMode;
 
     if (grade === oldGrade) {
       // Same grade: rename/update the matching assignment for every class of this grade.
@@ -3764,7 +4054,9 @@ function handleSubjectFormSubmit(e) {
     subject: name,
     weeklyHours: hours,
     requiresRoom: room,
-    isHomeroomMain: isHomeroomMain
+    isHomeroomMain: isHomeroomMain,
+    domain: domain,
+    connectMode: connectMode
   };
 
   if (existingIndex !== -1) {
@@ -3835,6 +4127,7 @@ function showSubjectCSVPreviewModal() {
   const tbody = document.getElementById("subject-csv-preview-tbody");
   tbody.innerHTML = "";
 
+  const connectModeLabels = { none: '不連排', full: '全部連排', partial: '2節連排+分散' };
   tempImportSubjects.forEach(s => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -3843,6 +4136,8 @@ function showSubjectCSVPreviewModal() {
       <td>${s.weeklyHours} 節</td>
       <td>${s.requiresRoom || '無'}</td>
       <td><span class="badge ${s.isHomeroomMain ? 'badge-info' : 'badge-secondary'}">${s.isHomeroomMain ? '是' : '否'}</span></td>
+      <td>${s.domain || '—'}</td>
+      <td>${connectModeLabels[s.connectMode || 'none']}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -3909,14 +4204,14 @@ function showSubjectCSVPreviewModal() {
 }
 
 function downloadSubjectCSVTemplate() {
-  const header = "年級,科目名稱,每週節數,特殊教室,導師主要科目\n";
+  const header = "年級,科目名稱,每週節數,特殊教室,導師主要科目,領域,連排方式\n";
   const rows = [
-    "1,國語,6,,是",
-    "1,數學,3,,是",
-    "1,生活,6,,是",
-    "3,自然,3,自然,否",
-    "3,電腦,1,電腦,否",
-    "5,英語,3,,否"
+    "1,國語,6,,是,語文,",
+    "1,數學,3,,是,,",
+    "1,生活,6,,是,,",
+    "3,自然,3,自然,否,自然科學,部分連排",
+    "3,電腦,1,電腦,否,,",
+    "5,英語,3,,否,語文,全部連排"
   ].join("\n");
   
   const csvContent = "\uFEFF" + header + rows;

@@ -18,6 +18,26 @@
   --info-color: #0ea5e9; /* Sky */
   --info-bg: rgba(14, 165, 233, 0.15);
 
+  /* Timetable subject color-coding: fixed categorical order (validated for
+     colorblind-safe adjacent contrast). Subject name text always accompanies
+     the color, so these are a secondary identification aid, not the sole cue. */
+  --subject-blue: #2a78d6;
+  --subject-blue-bg: rgba(42, 120, 214, 0.16);
+  --subject-orange: #eb6834;
+  --subject-orange-bg: rgba(235, 104, 52, 0.16);
+  --subject-aqua: #1baf7a;
+  --subject-aqua-bg: rgba(27, 175, 122, 0.16);
+  --subject-yellow: #eda100;
+  --subject-yellow-bg: rgba(237, 161, 0, 0.18);
+  --subject-magenta: #e87ba4;
+  --subject-magenta-bg: rgba(232, 123, 164, 0.18);
+  --subject-green: #008300;
+  --subject-green-bg: rgba(0, 131, 0, 0.14);
+  --subject-violet: #4a3aa7;
+  --subject-violet-bg: rgba(74, 58, 167, 0.18);
+  --subject-red: #e34948;
+  --subject-red-bg: rgba(227, 73, 72, 0.16);
+
   --font-main: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --border-radius-lg: 16px;
@@ -314,6 +334,11 @@ h1, h2, h3, h4, h5, h6 {
 .btn-large {
   padding: 0.8rem 1.8rem;
   font-size: 1rem;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .btn-full {
@@ -855,10 +880,33 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border-color);
   transition: var(--transition-smooth);
+  position: relative;
+  padding-right: 1.75rem;
+}
+
+/* Always-visible chevron signals the row is clickable (opens the detail modal),
+   not just on hover - discoverability was previously hover-only. */
+.teacher-load-item::after {
+  content: "";
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--text-secondary);
+  border-bottom: 2px solid var(--text-secondary);
+  transform: translateY(-50%) rotate(-45deg);
+  opacity: 0.5;
+  transition: var(--transition-smooth);
 }
 
 .teacher-load-item:hover {
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: var(--primary-light);
+}
+
+.teacher-load-item:hover::after {
+  opacity: 1;
+  border-color: var(--primary-color);
 }
 
 .teacher-load-info {
@@ -1059,9 +1107,121 @@ h1, h2, h3, h4, h5, h6 {
   border-left: 1px solid rgba(255, 255, 255, 0.15);
 }
 
-/* Course colorway by teacher role (class-centric view): homeroom teacher = light blue, others = light green */
-.timetable-card.role-homeroom { border-left-color: var(--info-color); background-color: var(--info-bg); }
-.timetable-card.role-other { border-left-color: var(--success-color); background-color: var(--success-bg); }
+/* Course colorway by subject (used consistently across class/teacher/room views) -
+   subject name text always accompanies the color, so this is a secondary
+   identification aid: at a glance, matching colors = matching subject. */
+.timetable-card.subject-hue-blue { border-left-color: var(--subject-blue); background-color: var(--subject-blue-bg); }
+.timetable-card.subject-hue-orange { border-left-color: var(--subject-orange); background-color: var(--subject-orange-bg); }
+.timetable-card.subject-hue-aqua { border-left-color: var(--subject-aqua); background-color: var(--subject-aqua-bg); }
+.timetable-card.subject-hue-yellow { border-left-color: var(--subject-yellow); background-color: var(--subject-yellow-bg); }
+.timetable-card.subject-hue-magenta { border-left-color: var(--subject-magenta); background-color: var(--subject-magenta-bg); }
+.timetable-card.subject-hue-green { border-left-color: var(--subject-green); background-color: var(--subject-green-bg); }
+.timetable-card.subject-hue-violet { border-left-color: var(--subject-violet); background-color: var(--subject-violet-bg); }
+.timetable-card.subject-hue-red { border-left-color: var(--subject-red); background-color: var(--subject-red-bg); }
+
+/* Segmented-button dimension switcher (班級/教師/專科教室課表) - replaces a
+   plain <select> so the current mode is unmistakable at a glance. */
+.viewer-dimension-tabs {
+  display: flex;
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: 3px;
+  gap: 3px;
+}
+
+.viewer-dimension-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  background: none;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  font-family: var(--font-main);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition-smooth);
+}
+
+.viewer-dimension-btn:hover {
+  color: var(--text-main);
+}
+
+.viewer-dimension-btn.active {
+  background-color: var(--primary-color);
+  color: #ffffff;
+}
+
+#timetable-title {
+  font-size: 1.2rem;
+  color: var(--text-light);
+}
+
+/* Timetable legend: subject color key + special-state markers */
+.timetable-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.25rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.timetable-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.timetable-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.timetable-legend-swatch.is-locked {
+  background: none;
+  border: 1px dashed var(--warning-color);
+}
+
+.timetable-legend-swatch.is-busy {
+  background-color: var(--danger-bg);
+  border: 1px solid var(--danger-color);
+}
+
+/* Collapsible "advanced settings" sections (details/summary): used to keep
+   low-frequency/technical controls out of the way of the primary task by
+   default, expandable on demand. */
+details > summary {
+  list-style: none;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+details > summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 1em;
+  margin-right: 0.3rem;
+  color: var(--text-secondary);
+  transition: transform 0.15s ease;
+}
+
+details[open] > summary::before {
+  transform: rotate(90deg);
+}
 
 .timetable-card:active {
   cursor: grabbing;
@@ -1373,4 +1533,71 @@ h1, h2, h3, h4, h5, h6 {
 .teacher-load-item:hover {
   transform: translateX(4px);
   background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* --- PRINT --- */
+/* "列印當前課表" (Print current timetable) calls window.print() directly - the
+   app's dark glass UI otherwise prints as near-illegible dark-on-dark or
+   wastes ink on a full-page dark background. Hide the app chrome, force a
+   white page, and force the subject-color coding to survive printing
+   (browsers strip background colors by default unless told to keep them). */
+@media print {
+  .sidebar,
+  .top-header,
+  .action-bar,
+  #timetable-alert-box {
+    display: none !important;
+  }
+
+  body,
+  .app-container,
+  .main-content,
+  .view-container {
+    background: #ffffff !important;
+    color: #111111 !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .panel.glass {
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+  }
+
+  #timetable-title {
+    color: #111111 !important;
+  }
+
+  .timetable-legend {
+    background: #ffffff !important;
+    border: 1px solid #999 !important;
+    color: #111111 !important;
+  }
+
+  .timetable-table th,
+  .timetable-table td.time-cell {
+    background: #f0f0f0 !important;
+    color: #111111 !important;
+    border: 1px solid #999 !important;
+  }
+
+  .timetable-table td {
+    border: 1px solid #cccccc !important;
+  }
+
+  .timetable-card,
+  .timetable-legend-swatch {
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .timetable-card-subject,
+  .timetable-card-teacher,
+  .timetable-card-room {
+    color: #111111 !important;
+  }
 }

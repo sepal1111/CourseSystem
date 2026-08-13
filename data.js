@@ -17,12 +17,57 @@ export const DEFAULT_ENGINE_SETTINGS = {
   preferMorningCore: true,
   preferConsecutiveSpecial: true,
   maxSameSubjectPerDay: 2,
-  enforceEnglishSeparation: true,
-  enforceForcedConnect: true,
   homeroomMinFreePeriods: 2,
   preferDirectorHalfDay: true,
   maxTeacherWeeklyHours: 35
 };
+
+// Connect-mode options for a subject's admin-configured "連排方式" (consecutive
+// scheduling manner), set per (grade, subject) on the subject record itself:
+// - 'none': no forced consecutive scheduling (default; existing soft
+//   morning/afternoon and spreading preferences still apply as before).
+// - 'full': all of the subject's weekly periods placed as one consecutive
+//   block on a single day.
+// - 'partial': one 2-period consecutive block, with any remaining weekly
+//   periods scattered as standalone periods on separate days (requires at
+//   least 3 weekly periods to have a "remainder" - otherwise behaves as 'full').
+export const CONNECT_MODES = ['none', 'full', 'partial'];
+
+// Fixed-order categorical hue names for the timetable's per-subject color
+// coding (validated for colorblind-safe adjacent contrast). Subject name is
+// always shown as text alongside the color, so color here is a secondary aid,
+// not the sole identifier.
+export const SUBJECT_COLOR_HUES = ['blue', 'orange', 'aqua', 'yellow', 'magenta', 'green', 'violet', 'red'];
+
+// Curated hue assignments for common elementary-school subject names, chosen
+// for intuitive memorability (e.g. PE/health both red, art/crafts both green).
+// Any subject not listed here falls back to a deterministic hash below, so it
+// still gets a stable color without needing to be added manually.
+const CURATED_SUBJECT_HUE_MAP = {
+  '國語': 'blue', '數學': 'violet', '社會': 'orange', '自然': 'aqua',
+  '英語': 'magenta', '英文': 'magenta', '彈(英)': 'magenta',
+  '音樂': 'yellow', '藝(音)': 'yellow',
+  '美勞': 'green', '美術': 'green', '藝(美)': 'green',
+  '體育': 'red', '健康': 'red',
+  '生活': 'orange'
+};
+
+/**
+ * Returns a stable categorical hue name ('blue', 'orange', ...) for a subject
+ * name, so the same subject always renders the same color across renders and
+ * sessions. Curated subjects get an intuitive hand-picked hue; anything else
+ * is hashed deterministically into the same 8-hue rotation.
+ */
+export function getSubjectColorHue(subjectName) {
+  if (!subjectName) return SUBJECT_COLOR_HUES[0];
+  if (CURATED_SUBJECT_HUE_MAP[subjectName]) return CURATED_SUBJECT_HUE_MAP[subjectName];
+
+  let hash = 0;
+  for (let i = 0; i < subjectName.length; i++) {
+    hash = (hash * 31 + subjectName.charCodeAt(i)) >>> 0;
+  }
+  return SUBJECT_COLOR_HUES[hash % SUBJECT_COLOR_HUES.length];
+}
 
 /**
  * Parses teacher CSV content
@@ -164,9 +209,13 @@ export function parseClassCSV(csvText) {
   
   if (hasHeader) {
     const idCol = headers.findIndex(h => h.includes("ID") || h.includes("編號") || h.includes("代碼"));
-    const nameCol = headers.findIndex(h => h.includes("名稱") || h.includes("名字") || h.includes("班級"));
-    const gradeCol = headers.findIndex(h => h.includes("年級") || h.includes("級別") || h.includes("年"));
-    
+    // Excludes idCol from the name/grade searches - a header like "班級ID"
+    // otherwise self-matches the "班級" keyword meant for the name column
+    // ("班級ID" also contains "班級"), causing the name column to be
+    // misdetected as the ID column and the class name to just duplicate the ID.
+    const nameCol = headers.findIndex((h, idx) => idx !== idCol && (h.includes("名稱") || h.includes("名字") || h.includes("班級")));
+    const gradeCol = headers.findIndex((h, idx) => idx !== idCol && (h.includes("年級") || h.includes("級別") || h.includes("年")));
+
     if (idCol !== -1) idIdx = idCol;
     if (nameCol !== -1) nameIdx = nameCol;
     if (gradeCol !== -1) gradeIdx = gradeCol;
@@ -312,22 +361,26 @@ export function parseSubjectCSV(csvText) {
   const headerText = firstLine.toLowerCase();
   
   const hasHeader = ["年級", "grade", "科目", "名稱", "subject", "節數", "hours"].some(k => headerText.includes(k));
-  
-  let gradeIdx = 0, nameIdx = 1, hoursIdx = 2, roomIdx = 3, homeroomIdx = 4;
+
+  let gradeIdx = 0, nameIdx = 1, hoursIdx = 2, roomIdx = 3, homeroomIdx = 4, domainIdx = -1, connectModeIdx = -1;
   let startIndex = 1;
-  
+
   if (hasHeader) {
     const gradeCol = headers.findIndex(h => h.includes("年級") || h.includes("年") || h.includes("grade"));
     const nameCol = headers.findIndex(h => h.includes("科目") || h.includes("名稱") || h.includes("subject"));
     const hoursCol = headers.findIndex(h => h.includes("節數") || h.includes("時數") || h.includes("hours"));
     const roomCol = headers.findIndex(h => h.includes("教室") || h.includes("room") || h.includes("特殊"));
     const homeroomCol = headers.findIndex(h => h.includes("導師") || h.includes("主科") || h.includes("屬性"));
-    
+    const domainCol = headers.findIndex(h => h.includes("領域") || h.includes("domain"));
+    const connectModeCol = headers.findIndex(h => h.includes("連排"));
+
     if (gradeCol !== -1) gradeIdx = gradeCol;
     if (nameCol !== -1) nameIdx = nameCol;
     if (hoursCol !== -1) hoursIdx = hoursCol;
     if (roomCol !== -1) roomIdx = roomCol;
     if (homeroomCol !== -1) homeroomIdx = homeroomCol;
+    if (domainCol !== -1) domainIdx = domainCol;
+    if (connectModeCol !== -1) connectModeIdx = connectModeCol;
     startIndex = 1;
   } else {
     startIndex = 0;
@@ -360,15 +413,88 @@ export function parseSubjectCSV(csvText) {
         isHomeroomMain = false;
       }
     }
-    
+
+    const domainVal = (domainIdx !== -1 && row[domainIdx]) ? row[domainIdx] : null;
+
+    let connectModeVal = 'none';
+    if (connectModeIdx !== -1 && row[connectModeIdx]) {
+      const val = row[connectModeIdx].trim().toLowerCase();
+      if (["全部連排", "整週連排", "full"].includes(val)) {
+        connectModeVal = 'full';
+      } else if (["部分連排", "2節連排", "partial"].includes(val)) {
+        connectModeVal = 'partial';
+      }
+    }
+
     subjects.push({
       id: `${gradeVal}-${nameVal}`,
       grade: gradeVal,
       subject: nameVal,
       weeklyHours: hoursVal,
       requiresRoom: row[roomIdx] || null,
-      isHomeroomMain: isHomeroomMain
+      isHomeroomMain: isHomeroomMain,
+      domain: domainVal,
+      connectMode: connectModeVal
     });
   }
   return subjects;
+}
+
+/**
+ * Parses special-room ("專科教室") CSV content
+ * CSV schema: 代碼/簡稱,教室全稱,同時段容納上限
+ */
+export function parseRoomCSV(csvText) {
+  const lines = csvText.split('\n');
+  if (lines.length === 0) return [];
+
+  const rooms = [];
+
+  const firstLine = lines[0].trim();
+  const headers = firstLine.split(',').map(h => h.trim());
+  const headerText = firstLine.toLowerCase();
+
+  const hasHeader = ["代碼", "簡稱", "code", "全稱", "名稱", "name", "上限", "容納", "limit"].some(k => headerText.includes(k));
+
+  let keyIdx = 0, nameIdx = 1, limitIdx = 2;
+  let startIndex = 1;
+
+  if (hasHeader) {
+    const keyCol = headers.findIndex(h => h.includes("代碼") || h.includes("簡稱") || h.includes("code"));
+    const nameCol = headers.findIndex(h => h.includes("全稱") || h.includes("名稱") || h.includes("name"));
+    const limitCol = headers.findIndex(h => h.includes("上限") || h.includes("容納") || h.includes("limit"));
+
+    if (keyCol !== -1) keyIdx = keyCol;
+    if (nameCol !== -1) nameIdx = nameCol;
+    if (limitCol !== -1) limitIdx = limitCol;
+    startIndex = 1;
+  } else {
+    startIndex = 0;
+  }
+
+  for (let i = startIndex; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    const row = line.split(',').map(item => {
+      let trimmed = item?.trim() || "";
+      if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+        trimmed = trimmed.substring(1, trimmed.length - 1).trim();
+      }
+      return trimmed;
+    });
+
+    const key = row[keyIdx];
+    if (!key) continue;
+
+    const name = row[nameIdx] || key;
+    const limitVal = parseInt(row[limitIdx]);
+
+    rooms.push({
+      key,
+      name,
+      limit: (!isNaN(limitVal) && limitVal >= 1) ? limitVal : 1
+    });
+  }
+  return rooms;
 }
