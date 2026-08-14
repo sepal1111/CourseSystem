@@ -4587,6 +4587,7 @@ function openTeacherAssignmentDetailModal(teacherId) {
             <th style="text-align:center;">每週節數</th>
             <th>特殊教室</th>
             <th>類別/專長</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -4604,7 +4605,7 @@ function openTeacherAssignmentDetailModal(teacherId) {
               typeBadge = '<span class="badge bg-success">⭐ 專長相符</span>';
             }
 
-            const roomText = assign.requiresRoom 
+            const roomText = assign.requiresRoom
               ? `<span class="badge bg-info">${(state.rooms || SPECIAL_ROOMS)[assign.requiresRoom]?.name || assign.requiresRoom}</span>`
               : '-';
 
@@ -4615,6 +4616,11 @@ function openTeacherAssignmentDetailModal(teacherId) {
                 <td style="text-align:center;"><strong>${assign.weeklyHours}</strong> 節</td>
                 <td>${roomText}</td>
                 <td>${typeBadge}</td>
+                <td>
+                  <button class="btn btn-danger-outline btn-icon-only btn-remove-teacher-assignment" data-assign-id="${assign.id}" title="移除此教師的這門課程指派">
+                    <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                  </button>
+                </td>
               </tr>
             `;
           }).join('')}
@@ -4648,6 +4654,30 @@ function openTeacherAssignmentDetailModal(teacherId) {
     <h4><i data-lucide="book-open" class="icon-small text-primary mr-1"></i> 已指派班級與課程明細 (共 ${teacherAssignments.length} 門，${teacher.assignedHours} 節)：</h4>
     ${tableHtml}
   `;
+
+  body.querySelectorAll(".btn-remove-teacher-assignment").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const assignId = btn.getAttribute("data-assign-id");
+      const assign = state.assignments.find(a => a.id === assignId);
+      if (!assign) return;
+
+      const cls = state.classes.find(c => c.id === assign.classId);
+      const className = cls ? cls.name : assign.classId;
+      if (!confirm(`確定要移除 ${teacher.name} 老師在「${className}」的「${assign.subject}」課程指派嗎？該課程將變回未配課狀態，需重新指派教師。`)) {
+        return;
+      }
+
+      assign.teacherId = "";
+      state.schedule = null;
+      saveAppState(state);
+      showConsoleLog(`已移除 ${teacher.name} 老師在「${className}」的「${assign.subject}」課程指派，該課程已變回未配課狀態。`);
+
+      // Refresh whichever tab is behind the modal, then re-render the modal
+      // itself in place with the updated assignment list.
+      renderCurrentTab();
+      openTeacherAssignmentDetailModal(teacherId);
+    });
+  });
 
   modal.classList.add("open");
   safeCreateIcons();

@@ -1,3 +1,19 @@
+## [2026-08-13 18:35:00] - 教師「配課明細表」新增刪除已指派課程功能
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 在檢視老師 - 配課明細表功能中，增加一個刪除已指派課程功能
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   `openTeacherAssignmentDetailModal()` 的課程明細表格新增「操作」欄，每一列課程配一個刪除按鈕。點擊後跳出 `confirm()` 確認（列出教師姓名、班級、科目），確認後將該筆 `CourseAssignment` 的 `teacherId` 清空（比照全站既有「取消指派教師」的統一慣例——不刪除課程需求本身，只解除該教師與這門課的配對關係，讓課程變回「未配課」狀態可重新指派，而非把課程從課務計畫中整筆刪掉），同時清空 `state.schedule`（因配課異動須重新排課）並記錄操作日誌。
+    *   刪除後呼叫 `renderCurrentTab()` 讓背景分頁（不論此對話框是從 Dashboard、Engine 側欄、Settings 教師表、或配課總覽的哪個入口開啟）同步更新統計數據，並重新呼叫 `openTeacherAssignmentDetailModal(teacherId)` 就地刷新對話框內容，讓使用者可以連續刪除多筆課程而不必每次都重新點擊開啟。
+    *   已以 Node VM 直接執行 `openTeacherAssignmentDetailModal()` 實際原始碼驗證：課程列表正確渲染刪除按鈕、確認刪除後正確清空 `teacherId`（而非刪除配課紀錄本身）並使課表失效、背景分頁與對話框皆正確刷新、取消確認對話框時配課資料維持不變，共 4 項情境全數通過；並以全面掃描確認新增元件與既有 HTML 結構完全對應。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `app.js`: `openTeacherAssignmentDetailModal()` 新增「操作」欄與刪除按鈕、對應的移除課程指派事件邏輯。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次教師配課明細表刪除功能開發歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
 ## [2026-08-13 18:20:00] - [Self-Correction / Bugfix] 修正「清空所有紀錄」按鈕因 Electron 不支援 window.prompt() 而完全無效
 
 *   **使用者提示詞 / 需求 (User Prompt):**
