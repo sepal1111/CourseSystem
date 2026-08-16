@@ -16,6 +16,8 @@ export const DEFAULT_ENGINE_SETTINGS = {
   maxBacktracks: 50000,
   preferMorningCore: true,
   preferConsecutiveSpecial: true,
+  preferGradeCommonFreeBlock: true,
+  gradeMinCommonFreePeriods: 2,
   maxSameSubjectPerDay: 2,
   homeroomMinFreePeriods: 2,
   preferDirectorHalfDay: true,

@@ -401,14 +401,24 @@ document.addEventListener("DOMContentLoaded", () => {
   // so switching tabs mid-edit doesn't silently discard them.
   [
     "engine-max-backtracks", "engine-prefer-morning-core", "engine-prefer-consecutive-special",
-    "engine-max-same-subject-per-day", "engine-max-teacher-weekly-hours", "engine-homeroom-min-free-periods",
-    "engine-prefer-director-half-day"
+    "engine-prefer-grade-common-free", "engine-max-same-subject-per-day", "engine-max-teacher-weekly-hours",
+    "engine-homeroom-min-free-periods", "engine-prefer-director-half-day"
   ].forEach(id => {
-    document.getElementById(id).addEventListener("change", () => {
-      state.engineSettings = readEngineSettingsForm();
-      saveAppState(state);
-    });
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener("change", () => {
+        state.engineSettings = readEngineSettingsForm();
+        saveAppState(state);
+      });
+    }
   });
+
+  // Grade homeroom common busy batch tool handlers
+  const btnApplyGradeBusy = document.getElementById("btn-apply-grade-busy");
+  if (btnApplyGradeBusy) btnApplyGradeBusy.addEventListener("click", handleApplyGradeBusySlots);
+
+  const btnClearGradeBusy = document.getElementById("btn-clear-grade-busy");
+  if (btnClearGradeBusy) btnClearGradeBusy.addEventListener("click", handleClearGradeBusySlots);
 
   // Viewer Handlers
   document.getElementById("viewer-dimension").addEventListener("change", handleViewerDimensionChange);
@@ -2868,6 +2878,8 @@ function populateEngineSettingsForm() {
   document.getElementById("engine-max-backtracks").value = settings.maxBacktracks;
   document.getElementById("engine-prefer-morning-core").checked = settings.preferMorningCore;
   document.getElementById("engine-prefer-consecutive-special").checked = settings.preferConsecutiveSpecial;
+  const elPreferGradeCommon = document.getElementById("engine-prefer-grade-common-free");
+  if (elPreferGradeCommon) elPreferGradeCommon.checked = settings.preferGradeCommonFreeBlock !== false;
   document.getElementById("engine-max-same-subject-per-day").value = settings.maxSameSubjectPerDay;
   document.getElementById("engine-max-teacher-weekly-hours").value = settings.maxTeacherWeeklyHours;
   document.getElementById("engine-homeroom-min-free-periods").value = settings.homeroomMinFreePeriods;
@@ -2878,10 +2890,13 @@ function populateEngineSettingsForm() {
  * Reads the current engine settings form values into a plain settings object.
  */
 function readEngineSettingsForm() {
+  const elPreferGradeCommon = document.getElementById("engine-prefer-grade-common-free");
   return {
     maxBacktracks: parseInt(document.getElementById("engine-max-backtracks").value) || DEFAULT_ENGINE_SETTINGS.maxBacktracks,
     preferMorningCore: document.getElementById("engine-prefer-morning-core").checked,
     preferConsecutiveSpecial: document.getElementById("engine-prefer-consecutive-special").checked,
+    preferGradeCommonFreeBlock: elPreferGradeCommon ? elPreferGradeCommon.checked : DEFAULT_ENGINE_SETTINGS.preferGradeCommonFreeBlock,
+    gradeMinCommonFreePeriods: 2,
     maxSameSubjectPerDay: parseInt(document.getElementById("engine-max-same-subject-per-day").value) || DEFAULT_ENGINE_SETTINGS.maxSameSubjectPerDay,
     maxTeacherWeeklyHours: parseInt(document.getElementById("engine-max-teacher-weekly-hours").value) || DEFAULT_ENGINE_SETTINGS.maxTeacherWeeklyHours,
     homeroomMinFreePeriods: (() => {
@@ -2890,6 +2905,74 @@ function readEngineSettingsForm() {
     })(),
     preferDirectorHalfDay: document.getElementById("engine-prefer-director-half-day").checked
   };
+}
+
+function handleApplyGradeBusySlots() {
+  const gradeVal = parseInt(document.getElementById("batch-grade-busy-grade").value);
+  const dayVal = parseInt(document.getElementById("batch-grade-busy-day").value);
+  const pairVal = document.getElementById("batch-grade-busy-pair").value;
+
+  if (isNaN(gradeVal) || isNaN(dayVal) || !pairVal) return;
+
+  const periods = pairVal.split('-').map(p => parseInt(p)).filter(p => !isNaN(p));
+  const newSlots = periods.map(p => `${dayVal}-${p}`);
+
+  const gradeClasses = state.classes.filter(c => c.grade === gradeVal).map(c => c.id);
+  const gradeHomerooms = state.teachers.filter(t => t.role === 'homeroom' && gradeClasses.includes(t.targetClassId));
+
+  if (gradeHomerooms.length === 0) {
+    alert(`找不到 ${gradeVal}年級 的帶班導師！請先至「教師管理」設定導師身分與帶班班級。`);
+    return;
+  }
+
+  let updatedCount = 0;
+  gradeHomerooms.forEach(t => {
+    t.busySlots = Array.from(new Set([...(t.busySlots || []), ...newSlots]));
+    updatedCount++;
+  });
+
+  state.schedule = null;
+  saveAppState(state);
+  renderCurrentTab();
+
+  const dayNames = ["一", "二", "三", "四", "五"];
+  showConsoleLog(`已成功為 ${gradeVal}年級 ${updatedCount} 位導師批次設定共同不可排課時段：週${dayNames[dayVal-1]} 第${periods.join('~')}節。`);
+  alert(`已成功為 ${gradeVal}年級 全體導師 (${gradeHomerooms.map(t=>t.name).join(', ')}) 一鍵設定不可排課時段 (週${dayNames[dayVal-1]} 第${periods.join('~')}節)！`);
+}
+
+function handleClearGradeBusySlots() {
+  const gradeVal = parseInt(document.getElementById("batch-grade-busy-grade").value);
+  const dayVal = parseInt(document.getElementById("batch-grade-busy-day").value);
+  const pairVal = document.getElementById("batch-grade-busy-pair").value;
+
+  if (isNaN(gradeVal) || isNaN(dayVal) || !pairVal) return;
+
+  const periods = pairVal.split('-').map(p => parseInt(p)).filter(p => !isNaN(p));
+  const slotsToRemove = new Set(periods.map(p => `${dayVal}-${p}`));
+
+  const gradeClasses = state.classes.filter(c => c.grade === gradeVal).map(c => c.id);
+  const gradeHomerooms = state.teachers.filter(t => t.role === 'homeroom' && gradeClasses.includes(t.targetClassId));
+
+  if (gradeHomerooms.length === 0) {
+    alert(`找不到 ${gradeVal}年級 的帶班導師！`);
+    return;
+  }
+
+  let updatedCount = 0;
+  gradeHomerooms.forEach(t => {
+    if (t.busySlots) {
+      t.busySlots = t.busySlots.filter(s => !slotsToRemove.has(s));
+      updatedCount++;
+    }
+  });
+
+  state.schedule = null;
+  saveAppState(state);
+  renderCurrentTab();
+
+  const dayNames = ["一", "二", "三", "四", "五"];
+  showConsoleLog(`已成功清除 ${gradeVal}年級 導師之週${dayNames[dayVal-1]} 第${periods.join('~')}節 不可排課時段。`);
+  alert(`已成功清除 ${gradeVal}年級 全體導師在週${dayNames[dayVal-1]} 第${periods.join('~')}節 的不可排課時段！`);
 }
 
 function renderEngineView() {
@@ -3120,32 +3203,15 @@ function renderTimetableLegend() {
   const container = document.getElementById("timetable-legend");
   if (!container) return;
 
-  if (!state.schedule) {
-    container.innerHTML = "";
-    return;
-  }
-
-  const subjectsPresent = new Set();
-  Object.values(state.schedule).forEach(classSchedule => {
-    Object.values(classSchedule).forEach(cell => {
-      if (cell && cell.subject) subjectsPresent.add(cell.subject);
-    });
-  });
-
-  if (subjectsPresent.size === 0) {
-    container.innerHTML = "";
-    return;
-  }
-
-  const subjectSwatches = [...subjectsPresent].sort((a, b) => a.localeCompare(b)).map(subject => `
-    <div class="timetable-legend-item">
-      <span class="timetable-legend-swatch subject-hue-${getSubjectColorHue(subject)}" style="background-color: var(--subject-${getSubjectColorHue(subject)}); border-radius: 3px;"></span>
-      <span>${subject}</span>
-    </div>
-  `).join('');
-
   container.innerHTML = `
-    ${subjectSwatches}
+    <div class="timetable-legend-item">
+      <span class="timetable-legend-swatch subject-hue-blue" style="background-color: var(--subject-blue); border-radius: 3px;"></span>
+      <span>導師授課 (藍色)</span>
+    </div>
+    <div class="timetable-legend-item">
+      <span class="timetable-legend-swatch subject-hue-yellow" style="background-color: var(--subject-yellow); border-radius: 3px;"></span>
+      <span>科任 / 非導師授課 (黃色)</span>
+    </div>
     <div class="timetable-legend-item">
       <span class="timetable-legend-swatch is-locked"></span>
       <span>已鎖定固定時段</span>
@@ -3280,7 +3346,8 @@ function renderClassCell(td, classId, day, period) {
     const teacher = state.teachers.find(t => t.id === cell.teacherId);
     const teacherName = teacher ? teacher.name : cell.teacherId;
     const roomNameStr = cell.requiresRoom ? ((state.rooms || SPECIAL_ROOMS)[cell.requiresRoom]?.name || cell.requiresRoom) : '';
-    const colorClass = `subject-hue-${getSubjectColorHue(cell.subject)}`;
+    const isHomeroom = teacher && (teacher.role === 'homeroom' || teacher.targetClassId === classId);
+    const colorClass = isHomeroom ? 'subject-hue-blue' : 'subject-hue-yellow';
     const isLocked = Boolean(cell.locked);
     const lockIconHtml = isLocked ? '<i data-lucide="lock" class="timetable-card-lock-icon"></i>' : '';
 
@@ -3344,7 +3411,8 @@ function renderTeacherCell(td, teacherId, day, period) {
 
   if (assignedClassId) {
     const roomNameStr = room ? ((state.rooms || SPECIAL_ROOMS)[room]?.name || room) : '';
-    const colorClass = `subject-hue-${getSubjectColorHue(subject)}`;
+    const isHomeroom = teacher && teacher.role === 'homeroom';
+    const colorClass = isHomeroom ? 'subject-hue-blue' : 'subject-hue-yellow';
 
     // Split layout (70% class/subject | 30% room, all centered) when a
     // special room is assigned; otherwise the original stacked layout.
@@ -3384,7 +3452,9 @@ function renderRoomCell(td, roomKey, day, period) {
   if (occupiedClasses.length > 0) {
     let content = "";
     occupiedClasses.forEach(oc => {
-      const colorClass = `subject-hue-${getSubjectColorHue(oc.subject)}`;
+      const teacher = state.teachers.find(t => t.id === oc.teacherId);
+      const isHomeroom = teacher && teacher.role === 'homeroom';
+      const colorClass = isHomeroom ? 'subject-hue-blue' : 'subject-hue-yellow';
       content += `
         <div class="timetable-card ${colorClass}" style="height: auto; margin-bottom: 2px;">
           <span class="timetable-card-subject">${oc.classId} 班</span>

@@ -228,6 +228,46 @@
                   </button>
                 </div>
               </div>
+            <!-- Grade Homeroom Common Busy Batch Tool -->
+            <div class="panel glass mb-4 p-4" style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.2);">
+              <div class="flex-justify-between flex-wrap gap-3 align-items-center">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="users" class="text-primary" style="width: 20px; height: 20px;"></i>
+                  <span class="font-bold">一鍵設定年級導師共同不排課時段 (備課/會議)：</span>
+                </div>
+                <div class="flex gap-2 align-items-center flex-wrap">
+                  <select id="batch-grade-busy-grade" class="select-field" style="width: 110px;">
+                    <option value="1">一年級</option>
+                    <option value="2">二年級</option>
+                    <option value="3">三年級</option>
+                    <option value="4">四年級</option>
+                    <option value="5" selected>五年級</option>
+                    <option value="6">六年級</option>
+                  </select>
+                  <select id="batch-grade-busy-day" class="select-field" style="width: 110px;">
+                    <option value="1">星期一</option>
+                    <option value="2">星期二</option>
+                    <option value="3">星期三</option>
+                    <option value="4" selected>星期四</option>
+                    <option value="5">星期五</option>
+                  </select>
+                  <select id="batch-grade-busy-pair" class="select-field" style="width: 130px;">
+                    <option value="5-6" selected>第 5~6 節 (下午)</option>
+                    <option value="2-3">第 2~3 節 (上午)</option>
+                    <option value="3-4">第 3~4 節 (上午)</option>
+                    <option value="6-7">第 6~7 節 (下午)</option>
+                    <option value="1-2">第 1~2 節 (上午)</option>
+                  </select>
+                  <button id="btn-apply-grade-busy" class="btn btn-sm btn-primary btn-icon-text">
+                    <i data-lucide="calendar-plus"></i>
+                    <span>一鍵套用至該年級導師</span>
+                  </button>
+                  <button id="btn-clear-grade-busy" class="btn btn-sm btn-outline btn-icon-text">
+                    <i data-lucide="calendar-minus"></i>
+                    <span>一鍵清除此年級時段</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div class="panel glass">
@@ -720,6 +760,14 @@
                         <input type="checkbox" id="engine-prefer-consecutive-special" checked>
                         <span class="checkmark"></span>
                         優化：藝術、自然與電腦等專科課程優先排為連堂 (2 節相連)
+                      </label>
+                    </div>
+
+                    <div class="form-group mb-4">
+                      <label class="checkbox-container">
+                        <input type="checkbox" id="engine-prefer-grade-common-free" checked>
+                        <span class="checkmark"></span>
+                        優化：自動保障每個年級每週至少連續 2 節導師共同不排課時段（用於年級備課/會議）
                       </label>
                     </div>
 

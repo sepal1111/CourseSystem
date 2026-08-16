@@ -1,0 +1,4 @@
+interface:
+  display_name: "教師配課規劃"
+  short_description: "逐領域規劃教師配課，檢核節數、減課、缺額與特殊班型"
+  default_prompt: "使用 $plan-teacher-course-assignments 讀取上一學年度配課與新職務表，和我逐領域討論並完成新學年度配課。"

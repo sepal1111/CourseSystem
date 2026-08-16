@@ -1,0 +1,3097 @@
+{
+  "teachers": [
+    {
+      "id": "T001",
+      "name": "蘇泓俊",
+      "role": "director",
+      "baseHours": 0,
+      "assignedHours": 0,
+      "targetClassId": null,
+      "specialties": [],
+      "busySlots": []
+    },
+    {
+      "id": "T002",
+      "name": "陳郁婷",
+      "role": "director",
+      "baseHours": 3,
+      "assignedHours": 3,
+      "targetClassId": null,
+      "specialties": [
+        "社會",
+        "健康"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T003",
+      "name": "許喻善",
+      "role": "director",
+      "baseHours": 3,
+      "assignedHours": 3,
+      "targetClassId": null,
+      "specialties": [
+        "社會",
+        "健康"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T004",
+      "name": "羅舒磷",
+      "role": "director",
+      "baseHours": 3,
+      "assignedHours": 3,
+      "targetClassId": null,
+      "specialties": [
+        "藝(音)",
+        "健康",
+        "閱"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T005",
+      "name": "林珮珍",
+      "role": "leader",
+      "baseHours": 9,
+      "assignedHours": 9,
+      "targetClassId": null,
+      "specialties": [
+        "自然"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T021",
+      "name": "張樹銘",
+      "role": "leader",
+      "baseHours": 9,
+      "assignedHours": 9,
+      "targetClassId": null,
+      "specialties": [
+        "自然"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T006",
+      "name": "楊銘富",
+      "role": "leader",
+      "baseHours": 4,
+      "assignedHours": 8,
+      "targetClassId": null,
+      "specialties": [
+        "彈(資)"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T022",
+      "name": "張榮祖",
+      "role": "leader",
+      "baseHours": 9,
+      "assignedHours": 9,
+      "targetClassId": null,
+      "specialties": [
+        "社會"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T008",
+      "name": "張毓真",
+      "role": "leader",
+      "baseHours": 9,
+      "assignedHours": 9,
+      "targetClassId": null,
+      "specialties": [
+        "彈(資)",
+        "健康",
+        "社會"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T007",
+      "name": "林靜宜",
+      "role": "leader",
+      "baseHours": 9,
+      "assignedHours": 10,
+      "targetClassId": null,
+      "specialties": [
+        "體育"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T023",
+      "name": "鄭以心",
+      "role": "leader",
+      "baseHours": 9,
+      "assignedHours": 9,
+      "targetClassId": null,
+      "specialties": [
+        "藝(音)"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T016",
+      "name": "黃雅如",
+      "role": "homeroom",
+      "baseHours": 16,
+      "assignedHours": 16,
+      "targetClassId": "101",
+      "specialties": [],
+      "busySlots": []
+    },
+    {
+      "id": "T017",
+      "name": "葉雅慧",
+      "role": "homeroom",
+      "baseHours": 16,
+      "assignedHours": 16,
+      "targetClassId": "102",
+      "specialties": [],
+      "busySlots": []
+    },
+    {
+      "id": "T024",
+      "name": "江律瑩",
+      "role": "homeroom",
+      "baseHours": 16,
+      "assignedHours": 16,
+      "targetClassId": "201",
+      "specialties": [],
+      "busySlots": []
+    },
+    {
+      "id": "T013",
+      "name": "張珮雯",
+      "role": "homeroom",
+      "baseHours": 16,
+      "assignedHours": 16,
+      "targetClassId": "202",
+      "specialties": [],
+      "busySlots": []
+    },
+    {
+      "id": "T025",
+      "name": "楊聖如",
+      "role": "homeroom",
+      "baseHours": 16,
+      "assignedHours": 16,
+      "targetClassId": "301",
+      "specialties": [],
+      "busySlots": []
+    },
+    {
+      "id": "T015",
+      "name": "陳美媛",
+      "role": "homeroom",
+      "baseHours": 16,
+      "assignedHours": 16,
+      "targetClassId": "302",
+      "specialties": [],
+      "busySlots": []
+    },
+    {
+      "id": "T011",
+      "name": "邵雋婷",
+      "role": "homeroom",
+      "baseHours": 16,
+      "assignedHours": 16,
+      "targetClassId": "401",
+      "specialties": [],
+      "busySlots": []
+    },
+    {
+      "id": "T026",
+      "name": "李紫菁",
+      "role": "homeroom",
+      "baseHours": 16,
+      "assignedHours": 16,
+      "targetClassId": "402",
+      "specialties": [],
+      "busySlots": []
+    },
+    {
+      "id": "T027",
+      "name": "鄭沛淇",
+      "role": "homeroom",
+      "baseHours": 16,
+      "assignedHours": 16,
+      "targetClassId": "403",
+      "specialties": [],
+      "busySlots": []
+    },
+    {
+      "id": "T019",
+      "name": "謝幸娟",
+      "role": "homeroom",
+      "baseHours": 16,
+      "assignedHours": 16,
+      "targetClassId": "501",
+      "specialties": [],
+      "busySlots": [
+        "4-5",
+        "4-6",
+        "4-7"
+      ]
+    },
+    {
+      "id": "T028",
+      "name": "鍾欣蓉",
+      "role": "homeroom",
+      "baseHours": 16,
+      "assignedHours": 16,
+      "targetClassId": "502",
+      "specialties": [],
+      "busySlots": [
+        "4-5",
+        "4-6",
+        "4-7"
+      ]
+    },
+    {
+      "id": "T010",
+      "name": "吳惠琳",
+      "role": "homeroom",
+      "baseHours": 16,
+      "assignedHours": 16,
+      "targetClassId": "503",
+      "specialties": [],
+      "busySlots": [
+        "4-5",
+        "4-6",
+        "4-7"
+      ]
+    },
+    {
+      "id": "T029",
+      "name": "黃美錐",
+      "role": "homeroom",
+      "baseHours": 16,
+      "assignedHours": 16,
+      "targetClassId": "601",
+      "specialties": [],
+      "busySlots": []
+    },
+    {
+      "id": "T014",
+      "name": "張瑋靈",
+      "role": "homeroom",
+      "baseHours": 14,
+      "assignedHours": 14,
+      "targetClassId": "602",
+      "specialties": [],
+      "busySlots": []
+    },
+    {
+      "id": "T030",
+      "name": "黃美琪",
+      "role": "homeroom",
+      "baseHours": 16,
+      "assignedHours": 16,
+      "targetClassId": "603",
+      "specialties": [],
+      "busySlots": []
+    },
+    {
+      "id": "T009",
+      "name": "甘艾靈",
+      "role": "subject",
+      "baseHours": 19,
+      "assignedHours": 19,
+      "targetClassId": null,
+      "specialties": [
+        "英文",
+        "彈(英)"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T012",
+      "name": "張廷亦",
+      "role": "subject",
+      "baseHours": 20,
+      "assignedHours": 20,
+      "targetClassId": null,
+      "specialties": [
+        "體育"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T031",
+      "name": "劉昱廷",
+      "role": "subject",
+      "baseHours": 20,
+      "assignedHours": 20,
+      "targetClassId": null,
+      "specialties": [
+        "社會"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T032",
+      "name": "許庭慈",
+      "role": "subject",
+      "baseHours": 20,
+      "assignedHours": 20,
+      "targetClassId": null,
+      "specialties": [
+        "英文",
+        "彈(英)"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T033",
+      "name": "自然鐘點",
+      "role": "hourly",
+      "baseHours": 0,
+      "assignedHours": 15,
+      "targetClassId": null,
+      "specialties": [
+        "自然"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T034",
+      "name": "本土_閩1",
+      "role": "hourly",
+      "baseHours": 0,
+      "assignedHours": 6,
+      "targetClassId": null,
+      "specialties": [
+        "本土"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T035",
+      "name": "本土_閩2",
+      "role": "hourly",
+      "baseHours": 0,
+      "assignedHours": 3,
+      "targetClassId": null,
+      "specialties": [
+        "本土"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T036",
+      "name": "本土_客",
+      "role": "hourly",
+      "baseHours": 0,
+      "assignedHours": 6,
+      "targetClassId": null,
+      "specialties": [
+        "本土"
+      ],
+      "busySlots": []
+    },
+    {
+      "id": "T041",
+      "name": "鐘點_音樂",
+      "role": "hourly",
+      "baseHours": 0,
+      "assignedHours": 4,
+      "targetClassId": null,
+      "specialties": [],
+      "busySlots": []
+    },
+    {
+      "id": "T042",
+      "name": "鐘點_雜課",
+      "role": "hourly",
+      "baseHours": 0,
+      "assignedHours": 6,
+      "targetClassId": null,
+      "specialties": [],
+      "busySlots": []
+    }
+  ],
+  "classes": [
+    {
+      "id": "101",
+      "name": "101",
+      "grade": 1
+    },
+    {
+      "id": "102",
+      "name": "102",
+      "grade": 1
+    },
+    {
+      "id": "201",
+      "name": "201",
+      "grade": 2
+    },
+    {
+      "id": "202",
+      "name": "202",
+      "grade": 2
+    },
+    {
+      "id": "301",
+      "name": "301",
+      "grade": 3
+    },
+    {
+      "id": "302",
+      "name": "302",
+      "grade": 3
+    },
+    {
+      "id": "401",
+      "name": "401",
+      "grade": 4
+    },
+    {
+      "id": "402",
+      "name": "402",
+      "grade": 4
+    },
+    {
+      "id": "403",
+      "name": "403",
+      "grade": 4
+    },
+    {
+      "id": "501",
+      "name": "501",
+      "grade": 5
+    },
+    {
+      "id": "502",
+      "name": "502",
+      "grade": 5
+    },
+    {
+      "id": "503",
+      "name": "503",
+      "grade": 5
+    },
+    {
+      "id": "601",
+      "name": "601",
+      "grade": 6
+    },
+    {
+      "id": "602",
+      "name": "602",
+      "grade": 6
+    },
+    {
+      "id": "603",
+      "name": "603",
+      "grade": 6
+    }
+  ],
+  "subjects": [
+    {
+      "id": "1-國語",
+      "grade": 1,
+      "subject": "國語",
+      "weeklyHours": 5,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "1-數學",
+      "grade": 1,
+      "subject": "數學",
+      "weeklyHours": 4,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "1-生活",
+      "grade": 1,
+      "subject": "生活",
+      "weeklyHours": 5,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "1-健康",
+      "grade": 1,
+      "subject": "健康",
+      "weeklyHours": 1,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "1-體育",
+      "grade": 1,
+      "subject": "體育",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "1-藝(音)",
+      "grade": 1,
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "requiresRoom": "音樂",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "1-閱讀",
+      "grade": 1,
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "requiresRoom": "圖書館",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "1-本土",
+      "grade": 1,
+      "subject": "本土",
+      "weeklyHours": 1,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "1-校本",
+      "grade": 1,
+      "subject": "校本",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "1-彈(英)",
+      "grade": 1,
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "2-國語",
+      "grade": 2,
+      "subject": "國語",
+      "weeklyHours": 5,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "2-數學",
+      "grade": 2,
+      "subject": "數學",
+      "weeklyHours": 4,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "2-生活",
+      "grade": 2,
+      "subject": "生活",
+      "weeklyHours": 5,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "2-健康",
+      "grade": 2,
+      "subject": "健康",
+      "weeklyHours": 1,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "2-體育",
+      "grade": 2,
+      "subject": "體育",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "2-藝(音)",
+      "grade": 2,
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "requiresRoom": "音樂",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "2-閱讀",
+      "grade": 2,
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "requiresRoom": "圖書館",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "2-本土",
+      "grade": 2,
+      "subject": "本土",
+      "weeklyHours": 1,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "2-校本",
+      "grade": 2,
+      "subject": "校本",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "2-彈(英)",
+      "grade": 2,
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "3-國語",
+      "grade": 3,
+      "subject": "國語",
+      "weeklyHours": 4,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "3-數學",
+      "grade": 3,
+      "subject": "數學",
+      "weeklyHours": 4,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "3-社會",
+      "grade": 3,
+      "subject": "社會",
+      "weeklyHours": 3,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "3-自然",
+      "grade": 3,
+      "subject": "自然",
+      "weeklyHours": 3,
+      "requiresRoom": "自然A",
+      "isHomeroomMain": true
+    },
+    {
+      "id": "3-健康",
+      "grade": 3,
+      "subject": "健康",
+      "weeklyHours": 1,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "3-體育",
+      "grade": 3,
+      "subject": "體育",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "3-綜合",
+      "grade": 3,
+      "subject": "綜合",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "3-藝(美)",
+      "grade": 3,
+      "subject": "藝(美)",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "3-藝(音)",
+      "grade": 3,
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "requiresRoom": "音樂",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "3-閱讀",
+      "grade": 3,
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "requiresRoom": "圖書館",
+      "isHomeroomMain": true
+    },
+    {
+      "id": "3-本土",
+      "grade": 3,
+      "subject": "本土",
+      "weeklyHours": 1,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "3-英文",
+      "grade": 3,
+      "subject": "英文",
+      "weeklyHours": 1,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "3-校本",
+      "grade": 3,
+      "subject": "校本",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "3-彈(英)",
+      "grade": 3,
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "3-彈(資)",
+      "grade": 3,
+      "subject": "彈(資)",
+      "weeklyHours": 1,
+      "requiresRoom": "科技",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "4-國語",
+      "grade": 4,
+      "subject": "國語",
+      "weeklyHours": 4,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "4-數學",
+      "grade": 4,
+      "subject": "數學",
+      "weeklyHours": 4,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "4-社會",
+      "grade": 4,
+      "subject": "社會",
+      "weeklyHours": 3,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "4-自然",
+      "grade": 4,
+      "subject": "自然",
+      "weeklyHours": 3,
+      "requiresRoom": "自然B",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "4-健康",
+      "grade": 4,
+      "subject": "健康",
+      "weeklyHours": 1,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "4-體育",
+      "grade": 4,
+      "subject": "體育",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "4-綜合",
+      "grade": 4,
+      "subject": "綜合",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "4-藝(美)",
+      "grade": 4,
+      "subject": "藝(美)",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "4-藝(音)",
+      "grade": 4,
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "requiresRoom": "音樂",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "4-閱讀",
+      "grade": 4,
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "requiresRoom": "圖書館",
+      "isHomeroomMain": true
+    },
+    {
+      "id": "4-本土",
+      "grade": 4,
+      "subject": "本土",
+      "weeklyHours": 1,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "4-英文",
+      "grade": 4,
+      "subject": "英文",
+      "weeklyHours": 1,
+      "requiresRoom": "英語",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "4-校本",
+      "grade": 4,
+      "subject": "校本",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "4-彈(英)",
+      "grade": 4,
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "requiresRoom": "英語",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "4-彈(資)",
+      "grade": 4,
+      "subject": "彈(資)",
+      "weeklyHours": 1,
+      "requiresRoom": "科技",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "5-國語",
+      "grade": 5,
+      "subject": "國語",
+      "weeklyHours": 4,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "5-數學",
+      "grade": 5,
+      "subject": "數學",
+      "weeklyHours": 4,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "5-社會",
+      "grade": 5,
+      "subject": "社會",
+      "weeklyHours": 3,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "5-自然",
+      "grade": 5,
+      "subject": "自然",
+      "weeklyHours": 3,
+      "requiresRoom": "自然A",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "5-健康",
+      "grade": 5,
+      "subject": "健康",
+      "weeklyHours": 1,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "5-體育",
+      "grade": 5,
+      "subject": "體育",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "5-綜合",
+      "grade": 5,
+      "subject": "綜合",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "5-藝(美)",
+      "grade": 5,
+      "subject": "藝(美)",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "5-藝(音)",
+      "grade": 5,
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "requiresRoom": "音樂",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "5-閱讀",
+      "grade": 5,
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "requiresRoom": "圖書館",
+      "isHomeroomMain": true
+    },
+    {
+      "id": "5-本土",
+      "grade": 5,
+      "subject": "本土",
+      "weeklyHours": 1,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "5-英文",
+      "grade": 5,
+      "subject": "英文",
+      "weeklyHours": 2,
+      "requiresRoom": "英語",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "5-校本",
+      "grade": 5,
+      "subject": "校本",
+      "weeklyHours": 3,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "5-彈(英)",
+      "grade": 5,
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "requiresRoom": "英語",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "5-彈(資)",
+      "grade": 5,
+      "subject": "彈(資)",
+      "weeklyHours": 2,
+      "requiresRoom": "科技",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "6-國語",
+      "grade": 6,
+      "subject": "國語",
+      "weeklyHours": 4,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "6-數學",
+      "grade": 6,
+      "subject": "數學",
+      "weeklyHours": 4,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "6-社會",
+      "grade": 6,
+      "subject": "社會",
+      "weeklyHours": 3,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "6-自然",
+      "grade": 6,
+      "subject": "自然",
+      "weeklyHours": 3,
+      "requiresRoom": "自然B",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "6-健康",
+      "grade": 6,
+      "subject": "健康",
+      "weeklyHours": 1,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "6-體育",
+      "grade": 6,
+      "subject": "體育",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "6-綜合",
+      "grade": 6,
+      "subject": "綜合",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "6-藝(美)",
+      "grade": 6,
+      "subject": "藝(美)",
+      "weeklyHours": 2,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "6-藝(音)",
+      "grade": 6,
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "requiresRoom": "音樂",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "6-閱讀",
+      "grade": 6,
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "requiresRoom": "圖書館",
+      "isHomeroomMain": true
+    },
+    {
+      "id": "6-本土",
+      "grade": 6,
+      "subject": "本土",
+      "weeklyHours": 1,
+      "requiresRoom": null,
+      "isHomeroomMain": false
+    },
+    {
+      "id": "6-英文",
+      "grade": 6,
+      "subject": "英文",
+      "weeklyHours": 2,
+      "requiresRoom": "英語",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "6-校本",
+      "grade": 6,
+      "subject": "校本",
+      "weeklyHours": 3,
+      "requiresRoom": null,
+      "isHomeroomMain": true
+    },
+    {
+      "id": "6-彈(英)",
+      "grade": 6,
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "requiresRoom": "英語",
+      "isHomeroomMain": false
+    },
+    {
+      "id": "6-彈(資)",
+      "grade": 6,
+      "subject": "彈(資)",
+      "weeklyHours": 2,
+      "requiresRoom": "科技",
+      "isHomeroomMain": false
+    }
+  ],
+  "assignments": [
+    {
+      "id": "101-國語",
+      "classId": "101",
+      "subject": "國語",
+      "weeklyHours": 5,
+      "teacherId": "T016",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "101-數學",
+      "classId": "101",
+      "subject": "數學",
+      "weeklyHours": 4,
+      "teacherId": "T016",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "101-生活",
+      "classId": "101",
+      "subject": "生活",
+      "weeklyHours": 5,
+      "teacherId": "T016",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "101-健康",
+      "classId": "101",
+      "subject": "健康",
+      "weeklyHours": 1,
+      "teacherId": "T031",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "101-體育",
+      "classId": "101",
+      "subject": "體育",
+      "weeklyHours": 2,
+      "teacherId": "T007",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "101-藝(音)",
+      "classId": "101",
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "teacherId": "T004",
+      "requiresRoom": "音樂",
+      "lockedSlots": []
+    },
+    {
+      "id": "101-閱讀",
+      "classId": "101",
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "teacherId": "T032",
+      "requiresRoom": "圖書館",
+      "lockedSlots": []
+    },
+    {
+      "id": "101-本土",
+      "classId": "101",
+      "subject": "本土",
+      "weeklyHours": 1,
+      "teacherId": "T034",
+      "requiresRoom": null,
+      "lockedSlots": [
+        {
+          "day": 1,
+          "period": 2
+        }
+      ]
+    },
+    {
+      "id": "101-校本",
+      "classId": "101",
+      "subject": "校本",
+      "weeklyHours": 2,
+      "teacherId": "T016",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "101-彈(英)",
+      "classId": "101",
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "teacherId": "T032",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "102-國語",
+      "classId": "102",
+      "subject": "國語",
+      "weeklyHours": 5,
+      "teacherId": "T017",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "102-數學",
+      "classId": "102",
+      "subject": "數學",
+      "weeklyHours": 4,
+      "teacherId": "T017",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "102-生活",
+      "classId": "102",
+      "subject": "生活",
+      "weeklyHours": 5,
+      "teacherId": "T017",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "102-健康",
+      "classId": "102",
+      "subject": "健康",
+      "weeklyHours": 1,
+      "teacherId": "T031",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "102-體育",
+      "classId": "102",
+      "subject": "體育",
+      "weeklyHours": 2,
+      "teacherId": "T007",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "102-藝(音)",
+      "classId": "102",
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "teacherId": "T004",
+      "requiresRoom": "音樂",
+      "lockedSlots": []
+    },
+    {
+      "id": "102-閱讀",
+      "classId": "102",
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "teacherId": "T032",
+      "requiresRoom": "圖書館",
+      "lockedSlots": []
+    },
+    {
+      "id": "102-本土",
+      "classId": "102",
+      "subject": "本土",
+      "weeklyHours": 1,
+      "teacherId": "T036",
+      "requiresRoom": null,
+      "lockedSlots": [
+        {
+          "day": 1,
+          "period": 2
+        }
+      ]
+    },
+    {
+      "id": "102-校本",
+      "classId": "102",
+      "subject": "校本",
+      "weeklyHours": 2,
+      "teacherId": "T017",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "102-彈(英)",
+      "classId": "102",
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "teacherId": "T032",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "201-國語",
+      "classId": "201",
+      "subject": "國語",
+      "weeklyHours": 5,
+      "teacherId": "T024",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "201-數學",
+      "classId": "201",
+      "subject": "數學",
+      "weeklyHours": 4,
+      "teacherId": "T024",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "201-生活",
+      "classId": "201",
+      "subject": "生活",
+      "weeklyHours": 5,
+      "teacherId": "T024",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "201-健康",
+      "classId": "201",
+      "subject": "健康",
+      "weeklyHours": 1,
+      "teacherId": "T004",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "201-體育",
+      "classId": "201",
+      "subject": "體育",
+      "weeklyHours": 2,
+      "teacherId": "T007",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "201-藝(音)",
+      "classId": "201",
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "teacherId": "T041",
+      "requiresRoom": "音樂",
+      "lockedSlots": []
+    },
+    {
+      "id": "201-閱讀",
+      "classId": "201",
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "teacherId": "T032",
+      "requiresRoom": "圖書館",
+      "lockedSlots": []
+    },
+    {
+      "id": "201-本土",
+      "classId": "201",
+      "subject": "本土",
+      "weeklyHours": 1,
+      "teacherId": "T034",
+      "requiresRoom": null,
+      "lockedSlots": [
+        {
+          "day": 1,
+          "period": 3
+        }
+      ]
+    },
+    {
+      "id": "201-校本",
+      "classId": "201",
+      "subject": "校本",
+      "weeklyHours": 2,
+      "teacherId": "T024",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "201-彈(英)",
+      "classId": "201",
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "teacherId": "T032",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "202-國語",
+      "classId": "202",
+      "subject": "國語",
+      "weeklyHours": 5,
+      "teacherId": "T013",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "202-數學",
+      "classId": "202",
+      "subject": "數學",
+      "weeklyHours": 4,
+      "teacherId": "T013",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "202-生活",
+      "classId": "202",
+      "subject": "生活",
+      "weeklyHours": 5,
+      "teacherId": "T013",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "202-健康",
+      "classId": "202",
+      "subject": "健康",
+      "weeklyHours": 1,
+      "teacherId": "T042",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "202-體育",
+      "classId": "202",
+      "subject": "體育",
+      "weeklyHours": 2,
+      "teacherId": "T007",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "202-藝(音)",
+      "classId": "202",
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "teacherId": "T041",
+      "requiresRoom": "音樂",
+      "lockedSlots": []
+    },
+    {
+      "id": "202-閱讀",
+      "classId": "202",
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "teacherId": "T032",
+      "requiresRoom": "圖書館",
+      "lockedSlots": []
+    },
+    {
+      "id": "202-本土",
+      "classId": "202",
+      "subject": "本土",
+      "weeklyHours": 1,
+      "teacherId": "T036",
+      "requiresRoom": null,
+      "lockedSlots": [
+        {
+          "day": 1,
+          "period": 3
+        }
+      ]
+    },
+    {
+      "id": "202-校本",
+      "classId": "202",
+      "subject": "校本",
+      "weeklyHours": 2,
+      "teacherId": "T013",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "202-彈(英)",
+      "classId": "202",
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "teacherId": "T032",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "301-國語",
+      "classId": "301",
+      "subject": "國語",
+      "weeklyHours": 4,
+      "teacherId": "T025",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "301-數學",
+      "classId": "301",
+      "subject": "數學",
+      "weeklyHours": 4,
+      "teacherId": "T025",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "301-社會",
+      "classId": "301",
+      "subject": "社會",
+      "weeklyHours": 3,
+      "teacherId": "T003",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "301-自然",
+      "classId": "301",
+      "subject": "自然",
+      "weeklyHours": 3,
+      "teacherId": "T033",
+      "requiresRoom": "自然A",
+      "lockedSlots": []
+    },
+    {
+      "id": "301-健康",
+      "classId": "301",
+      "subject": "健康",
+      "weeklyHours": 1,
+      "teacherId": "T025",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "301-體育",
+      "classId": "301",
+      "subject": "體育",
+      "weeklyHours": 2,
+      "teacherId": "T007",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "301-綜合",
+      "classId": "301",
+      "subject": "綜合",
+      "weeklyHours": 2,
+      "teacherId": "T025",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "301-藝(美)",
+      "classId": "301",
+      "subject": "藝(美)",
+      "weeklyHours": 2,
+      "teacherId": "T025",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "301-藝(音)",
+      "classId": "301",
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "teacherId": "T041",
+      "requiresRoom": "音樂",
+      "lockedSlots": []
+    },
+    {
+      "id": "301-閱讀",
+      "classId": "301",
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "teacherId": "T025",
+      "requiresRoom": "圖書館",
+      "lockedSlots": []
+    },
+    {
+      "id": "301-本土",
+      "classId": "301",
+      "subject": "本土",
+      "weeklyHours": 1,
+      "teacherId": "T034",
+      "requiresRoom": null,
+      "lockedSlots": [
+        {
+          "day": 1,
+          "period": 4
+        }
+      ]
+    },
+    {
+      "id": "301-英文",
+      "classId": "301",
+      "subject": "英文",
+      "weeklyHours": 1,
+      "teacherId": "T009",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "301-校本",
+      "classId": "301",
+      "subject": "校本",
+      "weeklyHours": 2,
+      "teacherId": "T025",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "301-彈(英)",
+      "classId": "301",
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "teacherId": "T009",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "301-彈(資)",
+      "classId": "301",
+      "subject": "彈(資)",
+      "weeklyHours": 1,
+      "teacherId": "T006",
+      "requiresRoom": "科技",
+      "lockedSlots": []
+    },
+    {
+      "id": "302-國語",
+      "classId": "302",
+      "subject": "國語",
+      "weeklyHours": 4,
+      "teacherId": "T015",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "302-數學",
+      "classId": "302",
+      "subject": "數學",
+      "weeklyHours": 4,
+      "teacherId": "T015",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "302-社會",
+      "classId": "302",
+      "subject": "社會",
+      "weeklyHours": 3,
+      "teacherId": "T042",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "302-自然",
+      "classId": "302",
+      "subject": "自然",
+      "weeklyHours": 3,
+      "teacherId": "T033",
+      "requiresRoom": "自然A",
+      "lockedSlots": []
+    },
+    {
+      "id": "302-健康",
+      "classId": "302",
+      "subject": "健康",
+      "weeklyHours": 1,
+      "teacherId": "T015",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "302-體育",
+      "classId": "302",
+      "subject": "體育",
+      "weeklyHours": 2,
+      "teacherId": "T012",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "302-綜合",
+      "classId": "302",
+      "subject": "綜合",
+      "weeklyHours": 2,
+      "teacherId": "T015",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "302-藝(美)",
+      "classId": "302",
+      "subject": "藝(美)",
+      "weeklyHours": 2,
+      "teacherId": "T015",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "302-藝(音)",
+      "classId": "302",
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "teacherId": "T041",
+      "requiresRoom": "音樂",
+      "lockedSlots": []
+    },
+    {
+      "id": "302-閱讀",
+      "classId": "302",
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "teacherId": "T015",
+      "requiresRoom": "圖書館",
+      "lockedSlots": []
+    },
+    {
+      "id": "302-本土",
+      "classId": "302",
+      "subject": "本土",
+      "weeklyHours": 1,
+      "teacherId": "T036",
+      "requiresRoom": null,
+      "lockedSlots": [
+        {
+          "day": 1,
+          "period": 4
+        }
+      ]
+    },
+    {
+      "id": "302-英文",
+      "classId": "302",
+      "subject": "英文",
+      "weeklyHours": 1,
+      "teacherId": "T009",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "302-校本",
+      "classId": "302",
+      "subject": "校本",
+      "weeklyHours": 2,
+      "teacherId": "T015",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "302-彈(英)",
+      "classId": "302",
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "teacherId": "T009",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "302-彈(資)",
+      "classId": "302",
+      "subject": "彈(資)",
+      "weeklyHours": 1,
+      "teacherId": "T006",
+      "requiresRoom": "科技",
+      "lockedSlots": []
+    },
+    {
+      "id": "401-國語",
+      "classId": "401",
+      "subject": "國語",
+      "weeklyHours": 4,
+      "teacherId": "T011",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "401-數學",
+      "classId": "401",
+      "subject": "數學",
+      "weeklyHours": 4,
+      "teacherId": "T011",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "401-社會",
+      "classId": "401",
+      "subject": "社會",
+      "weeklyHours": 3,
+      "teacherId": "T031",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "401-自然",
+      "classId": "401",
+      "subject": "自然",
+      "weeklyHours": 3,
+      "teacherId": "T005",
+      "requiresRoom": "自然B",
+      "lockedSlots": []
+    },
+    {
+      "id": "401-健康",
+      "classId": "401",
+      "subject": "健康",
+      "weeklyHours": 1,
+      "teacherId": "T011",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "401-體育",
+      "classId": "401",
+      "subject": "體育",
+      "weeklyHours": 2,
+      "teacherId": "T012",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "401-綜合",
+      "classId": "401",
+      "subject": "綜合",
+      "weeklyHours": 2,
+      "teacherId": "T011",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "401-藝(美)",
+      "classId": "401",
+      "subject": "藝(美)",
+      "weeklyHours": 2,
+      "teacherId": "T011",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "401-藝(音)",
+      "classId": "401",
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "teacherId": "T023",
+      "requiresRoom": "音樂",
+      "lockedSlots": []
+    },
+    {
+      "id": "401-閱讀",
+      "classId": "401",
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "teacherId": "T011",
+      "requiresRoom": "圖書館",
+      "lockedSlots": []
+    },
+    {
+      "id": "401-本土",
+      "classId": "401",
+      "subject": "本土",
+      "weeklyHours": 1,
+      "teacherId": "T034",
+      "requiresRoom": null,
+      "lockedSlots": [
+        {
+          "day": 2,
+          "period": 2
+        }
+      ]
+    },
+    {
+      "id": "401-英文",
+      "classId": "401",
+      "subject": "英文",
+      "weeklyHours": 1,
+      "teacherId": "T009",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "401-校本",
+      "classId": "401",
+      "subject": "校本",
+      "weeklyHours": 2,
+      "teacherId": "T011",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "401-彈(英)",
+      "classId": "401",
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "teacherId": "T009",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "401-彈(資)",
+      "classId": "401",
+      "subject": "彈(資)",
+      "weeklyHours": 1,
+      "teacherId": "T008",
+      "requiresRoom": "科技",
+      "lockedSlots": []
+    },
+    {
+      "id": "402-國語",
+      "classId": "402",
+      "subject": "國語",
+      "weeklyHours": 4,
+      "teacherId": "T026",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "402-數學",
+      "classId": "402",
+      "subject": "數學",
+      "weeklyHours": 4,
+      "teacherId": "T026",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "402-社會",
+      "classId": "402",
+      "subject": "社會",
+      "weeklyHours": 3,
+      "teacherId": "T031",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "402-自然",
+      "classId": "402",
+      "subject": "自然",
+      "weeklyHours": 3,
+      "teacherId": "T005",
+      "requiresRoom": "自然B",
+      "lockedSlots": []
+    },
+    {
+      "id": "402-健康",
+      "classId": "402",
+      "subject": "健康",
+      "weeklyHours": 1,
+      "teacherId": "T026",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "402-體育",
+      "classId": "402",
+      "subject": "體育",
+      "weeklyHours": 2,
+      "teacherId": "T012",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "402-綜合",
+      "classId": "402",
+      "subject": "綜合",
+      "weeklyHours": 2,
+      "teacherId": "T026",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "402-藝(美)",
+      "classId": "402",
+      "subject": "藝(美)",
+      "weeklyHours": 2,
+      "teacherId": "T026",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "402-藝(音)",
+      "classId": "402",
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "teacherId": "T023",
+      "requiresRoom": "音樂",
+      "lockedSlots": []
+    },
+    {
+      "id": "402-閱讀",
+      "classId": "402",
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "teacherId": "T026",
+      "requiresRoom": "圖書館",
+      "lockedSlots": []
+    },
+    {
+      "id": "402-本土",
+      "classId": "402",
+      "subject": "本土",
+      "weeklyHours": 1,
+      "teacherId": "T035",
+      "requiresRoom": null,
+      "lockedSlots": [
+        {
+          "day": 2,
+          "period": 2
+        }
+      ]
+    },
+    {
+      "id": "402-英文",
+      "classId": "402",
+      "subject": "英文",
+      "weeklyHours": 1,
+      "teacherId": "T009",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "402-校本",
+      "classId": "402",
+      "subject": "校本",
+      "weeklyHours": 2,
+      "teacherId": "T026",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "402-彈(英)",
+      "classId": "402",
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "teacherId": "T009",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "402-彈(資)",
+      "classId": "402",
+      "subject": "彈(資)",
+      "weeklyHours": 1,
+      "teacherId": "T008",
+      "requiresRoom": "科技",
+      "lockedSlots": []
+    },
+    {
+      "id": "403-國語",
+      "classId": "403",
+      "subject": "國語",
+      "weeklyHours": 4,
+      "teacherId": "T027",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "403-數學",
+      "classId": "403",
+      "subject": "數學",
+      "weeklyHours": 4,
+      "teacherId": "T027",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "403-社會",
+      "classId": "403",
+      "subject": "社會",
+      "weeklyHours": 3,
+      "teacherId": "T031",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "403-自然",
+      "classId": "403",
+      "subject": "自然",
+      "weeklyHours": 3,
+      "teacherId": "T005",
+      "requiresRoom": "自然B",
+      "lockedSlots": []
+    },
+    {
+      "id": "403-健康",
+      "classId": "403",
+      "subject": "健康",
+      "weeklyHours": 1,
+      "teacherId": "T027",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "403-體育",
+      "classId": "403",
+      "subject": "體育",
+      "weeklyHours": 2,
+      "teacherId": "T012",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "403-綜合",
+      "classId": "403",
+      "subject": "綜合",
+      "weeklyHours": 2,
+      "teacherId": "T027",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "403-藝(美)",
+      "classId": "403",
+      "subject": "藝(美)",
+      "weeklyHours": 2,
+      "teacherId": "T027",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "403-藝(音)",
+      "classId": "403",
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "teacherId": "T023",
+      "requiresRoom": "音樂",
+      "lockedSlots": []
+    },
+    {
+      "id": "403-閱讀",
+      "classId": "403",
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "teacherId": "T027",
+      "requiresRoom": "圖書館",
+      "lockedSlots": []
+    },
+    {
+      "id": "403-本土",
+      "classId": "403",
+      "subject": "本土",
+      "weeklyHours": 1,
+      "teacherId": "T036",
+      "requiresRoom": null,
+      "lockedSlots": [
+        {
+          "day": 2,
+          "period": 2
+        }
+      ]
+    },
+    {
+      "id": "403-英文",
+      "classId": "403",
+      "subject": "英文",
+      "weeklyHours": 1,
+      "teacherId": "T009",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "403-校本",
+      "classId": "403",
+      "subject": "校本",
+      "weeklyHours": 2,
+      "teacherId": "T027",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "403-彈(英)",
+      "classId": "403",
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "teacherId": "T009",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "403-彈(資)",
+      "classId": "403",
+      "subject": "彈(資)",
+      "weeklyHours": 1,
+      "teacherId": "T008",
+      "requiresRoom": "科技",
+      "lockedSlots": []
+    },
+    {
+      "id": "501-國語",
+      "classId": "501",
+      "subject": "國語",
+      "weeklyHours": 4,
+      "teacherId": "T019",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "501-數學",
+      "classId": "501",
+      "subject": "數學",
+      "weeklyHours": 4,
+      "teacherId": "T019",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "501-社會",
+      "classId": "501",
+      "subject": "社會",
+      "weeklyHours": 3,
+      "teacherId": "T031",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "501-自然",
+      "classId": "501",
+      "subject": "自然",
+      "weeklyHours": 3,
+      "teacherId": "T033",
+      "requiresRoom": "自然A",
+      "lockedSlots": []
+    },
+    {
+      "id": "501-健康",
+      "classId": "501",
+      "subject": "健康",
+      "weeklyHours": 1,
+      "teacherId": "T032",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "501-體育",
+      "classId": "501",
+      "subject": "體育",
+      "weeklyHours": 2,
+      "teacherId": "T012",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "501-綜合",
+      "classId": "501",
+      "subject": "綜合",
+      "weeklyHours": 2,
+      "teacherId": "T019",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "501-藝(美)",
+      "classId": "501",
+      "subject": "藝(美)",
+      "weeklyHours": 2,
+      "teacherId": "T019",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "501-藝(音)",
+      "classId": "501",
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "teacherId": "T023",
+      "requiresRoom": "音樂",
+      "lockedSlots": []
+    },
+    {
+      "id": "501-閱讀",
+      "classId": "501",
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "teacherId": "T019",
+      "requiresRoom": "圖書館",
+      "lockedSlots": []
+    },
+    {
+      "id": "501-本土",
+      "classId": "501",
+      "subject": "本土",
+      "weeklyHours": 1,
+      "teacherId": "T034",
+      "requiresRoom": null,
+      "lockedSlots": [
+        {
+          "day": 2,
+          "period": 3
+        }
+      ]
+    },
+    {
+      "id": "501-英文",
+      "classId": "501",
+      "subject": "英文",
+      "weeklyHours": 2,
+      "teacherId": "T032",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "501-校本",
+      "classId": "501",
+      "subject": "校本",
+      "weeklyHours": 3,
+      "teacherId": "T019",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "501-彈(英)",
+      "classId": "501",
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "teacherId": "T032",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "501-彈(資)",
+      "classId": "501",
+      "subject": "彈(資)",
+      "weeklyHours": 2,
+      "teacherId": "T006",
+      "requiresRoom": "科技",
+      "lockedSlots": []
+    },
+    {
+      "id": "502-國語",
+      "classId": "502",
+      "subject": "國語",
+      "weeklyHours": 4,
+      "teacherId": "T028",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "502-數學",
+      "classId": "502",
+      "subject": "數學",
+      "weeklyHours": 4,
+      "teacherId": "T028",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "502-社會",
+      "classId": "502",
+      "subject": "社會",
+      "weeklyHours": 3,
+      "teacherId": "T031",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "502-自然",
+      "classId": "502",
+      "subject": "自然",
+      "weeklyHours": 3,
+      "teacherId": "T033",
+      "requiresRoom": "自然A",
+      "lockedSlots": []
+    },
+    {
+      "id": "502-健康",
+      "classId": "502",
+      "subject": "健康",
+      "weeklyHours": 1,
+      "teacherId": "T032",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "502-體育",
+      "classId": "502",
+      "subject": "體育",
+      "weeklyHours": 2,
+      "teacherId": "T012",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "502-綜合",
+      "classId": "502",
+      "subject": "綜合",
+      "weeklyHours": 2,
+      "teacherId": "T028",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "502-藝(美)",
+      "classId": "502",
+      "subject": "藝(美)",
+      "weeklyHours": 2,
+      "teacherId": "T028",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "502-藝(音)",
+      "classId": "502",
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "teacherId": "T023",
+      "requiresRoom": "音樂",
+      "lockedSlots": []
+    },
+    {
+      "id": "502-閱讀",
+      "classId": "502",
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "teacherId": "T028",
+      "requiresRoom": "圖書館",
+      "lockedSlots": []
+    },
+    {
+      "id": "502-本土",
+      "classId": "502",
+      "subject": "本土",
+      "weeklyHours": 1,
+      "teacherId": "T035",
+      "requiresRoom": null,
+      "lockedSlots": [
+        {
+          "day": 2,
+          "period": 3
+        }
+      ]
+    },
+    {
+      "id": "502-英文",
+      "classId": "502",
+      "subject": "英文",
+      "weeklyHours": 2,
+      "teacherId": "T032",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "502-校本",
+      "classId": "502",
+      "subject": "校本",
+      "weeklyHours": 3,
+      "teacherId": "T028",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "502-彈(英)",
+      "classId": "502",
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "teacherId": "T032",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "502-彈(資)",
+      "classId": "502",
+      "subject": "彈(資)",
+      "weeklyHours": 2,
+      "teacherId": "T006",
+      "requiresRoom": "科技",
+      "lockedSlots": []
+    },
+    {
+      "id": "503-國語",
+      "classId": "503",
+      "subject": "國語",
+      "weeklyHours": 4,
+      "teacherId": "T010",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "503-數學",
+      "classId": "503",
+      "subject": "數學",
+      "weeklyHours": 4,
+      "teacherId": "T010",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "503-社會",
+      "classId": "503",
+      "subject": "社會",
+      "weeklyHours": 3,
+      "teacherId": "T031",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "503-自然",
+      "classId": "503",
+      "subject": "自然",
+      "weeklyHours": 3,
+      "teacherId": "T033",
+      "requiresRoom": "自然A",
+      "lockedSlots": []
+    },
+    {
+      "id": "503-健康",
+      "classId": "503",
+      "subject": "健康",
+      "weeklyHours": 1,
+      "teacherId": "T032",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "503-體育",
+      "classId": "503",
+      "subject": "體育",
+      "weeklyHours": 2,
+      "teacherId": "T012",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "503-綜合",
+      "classId": "503",
+      "subject": "綜合",
+      "weeklyHours": 2,
+      "teacherId": "T010",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "503-藝(美)",
+      "classId": "503",
+      "subject": "藝(美)",
+      "weeklyHours": 2,
+      "teacherId": "T010",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "503-藝(音)",
+      "classId": "503",
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "teacherId": "T023",
+      "requiresRoom": "音樂",
+      "lockedSlots": []
+    },
+    {
+      "id": "503-閱讀",
+      "classId": "503",
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "teacherId": "T010",
+      "requiresRoom": "圖書館",
+      "lockedSlots": []
+    },
+    {
+      "id": "503-本土",
+      "classId": "503",
+      "subject": "本土",
+      "weeklyHours": 1,
+      "teacherId": "T036",
+      "requiresRoom": null,
+      "lockedSlots": [
+        {
+          "day": 2,
+          "period": 3
+        }
+      ]
+    },
+    {
+      "id": "503-英文",
+      "classId": "503",
+      "subject": "英文",
+      "weeklyHours": 2,
+      "teacherId": "T032",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "503-校本",
+      "classId": "503",
+      "subject": "校本",
+      "weeklyHours": 3,
+      "teacherId": "T010",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "503-彈(英)",
+      "classId": "503",
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "teacherId": "T032",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "503-彈(資)",
+      "classId": "503",
+      "subject": "彈(資)",
+      "weeklyHours": 2,
+      "teacherId": "T006",
+      "requiresRoom": "科技",
+      "lockedSlots": []
+    },
+    {
+      "id": "601-國語",
+      "classId": "601",
+      "subject": "國語",
+      "weeklyHours": 4,
+      "teacherId": "T029",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "601-數學",
+      "classId": "601",
+      "subject": "數學",
+      "weeklyHours": 4,
+      "teacherId": "T029",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "601-社會",
+      "classId": "601",
+      "subject": "社會",
+      "weeklyHours": 3,
+      "teacherId": "T022",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "601-自然",
+      "classId": "601",
+      "subject": "自然",
+      "weeklyHours": 3,
+      "teacherId": "T021",
+      "requiresRoom": "自然B",
+      "lockedSlots": []
+    },
+    {
+      "id": "601-健康",
+      "classId": "601",
+      "subject": "健康",
+      "weeklyHours": 1,
+      "teacherId": "T002",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "601-體育",
+      "classId": "601",
+      "subject": "體育",
+      "weeklyHours": 2,
+      "teacherId": "T012",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "601-綜合",
+      "classId": "601",
+      "subject": "綜合",
+      "weeklyHours": 2,
+      "teacherId": "T029",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "601-藝(美)",
+      "classId": "601",
+      "subject": "藝(美)",
+      "weeklyHours": 2,
+      "teacherId": "T029",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "601-藝(音)",
+      "classId": "601",
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "teacherId": "T023",
+      "requiresRoom": "音樂",
+      "lockedSlots": []
+    },
+    {
+      "id": "601-閱讀",
+      "classId": "601",
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "teacherId": "T029",
+      "requiresRoom": "圖書館",
+      "lockedSlots": []
+    },
+    {
+      "id": "601-本土",
+      "classId": "601",
+      "subject": "本土",
+      "weeklyHours": 1,
+      "teacherId": "T034",
+      "requiresRoom": null,
+      "lockedSlots": [
+        {
+          "day": 2,
+          "period": 4
+        }
+      ]
+    },
+    {
+      "id": "601-英文",
+      "classId": "601",
+      "subject": "英文",
+      "weeklyHours": 2,
+      "teacherId": "T009",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "601-校本",
+      "classId": "601",
+      "subject": "校本",
+      "weeklyHours": 3,
+      "teacherId": "T029",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "601-彈(英)",
+      "classId": "601",
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "teacherId": "T009",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "601-彈(資)",
+      "classId": "601",
+      "subject": "彈(資)",
+      "weeklyHours": 2,
+      "teacherId": "T008",
+      "requiresRoom": "科技",
+      "lockedSlots": []
+    },
+    {
+      "id": "602-國語",
+      "classId": "602",
+      "subject": "國語",
+      "weeklyHours": 4,
+      "teacherId": "T014",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "602-數學",
+      "classId": "602",
+      "subject": "數學",
+      "weeklyHours": 4,
+      "teacherId": "T014",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "602-社會",
+      "classId": "602",
+      "subject": "社會",
+      "weeklyHours": 3,
+      "teacherId": "T022",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "602-自然",
+      "classId": "602",
+      "subject": "自然",
+      "weeklyHours": 3,
+      "teacherId": "T021",
+      "requiresRoom": "自然B",
+      "lockedSlots": []
+    },
+    {
+      "id": "602-健康",
+      "classId": "602",
+      "subject": "健康",
+      "weeklyHours": 1,
+      "teacherId": "T002",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "602-體育",
+      "classId": "602",
+      "subject": "體育",
+      "weeklyHours": 2,
+      "teacherId": "T012",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "602-綜合",
+      "classId": "602",
+      "subject": "綜合",
+      "weeklyHours": 2,
+      "teacherId": "T014",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "602-藝(美)",
+      "classId": "602",
+      "subject": "藝(美)",
+      "weeklyHours": 2,
+      "teacherId": "T042",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "602-藝(音)",
+      "classId": "602",
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "teacherId": "T023",
+      "requiresRoom": "音樂",
+      "lockedSlots": []
+    },
+    {
+      "id": "602-閱讀",
+      "classId": "602",
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "teacherId": "T014",
+      "requiresRoom": "圖書館",
+      "lockedSlots": []
+    },
+    {
+      "id": "602-本土",
+      "classId": "602",
+      "subject": "本土",
+      "weeklyHours": 1,
+      "teacherId": "T035",
+      "requiresRoom": null,
+      "lockedSlots": [
+        {
+          "day": 2,
+          "period": 4
+        }
+      ]
+    },
+    {
+      "id": "602-英文",
+      "classId": "602",
+      "subject": "英文",
+      "weeklyHours": 2,
+      "teacherId": "T009",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "602-校本",
+      "classId": "602",
+      "subject": "校本",
+      "weeklyHours": 3,
+      "teacherId": "T014",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "602-彈(英)",
+      "classId": "602",
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "teacherId": "T009",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "602-彈(資)",
+      "classId": "602",
+      "subject": "彈(資)",
+      "weeklyHours": 2,
+      "teacherId": "T008",
+      "requiresRoom": "科技",
+      "lockedSlots": []
+    },
+    {
+      "id": "603-國語",
+      "classId": "603",
+      "subject": "國語",
+      "weeklyHours": 4,
+      "teacherId": "T030",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "603-數學",
+      "classId": "603",
+      "subject": "數學",
+      "weeklyHours": 4,
+      "teacherId": "T030",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "603-社會",
+      "classId": "603",
+      "subject": "社會",
+      "weeklyHours": 3,
+      "teacherId": "T022",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "603-自然",
+      "classId": "603",
+      "subject": "自然",
+      "weeklyHours": 3,
+      "teacherId": "T021",
+      "requiresRoom": "自然B",
+      "lockedSlots": []
+    },
+    {
+      "id": "603-健康",
+      "classId": "603",
+      "subject": "健康",
+      "weeklyHours": 1,
+      "teacherId": "T002",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "603-體育",
+      "classId": "603",
+      "subject": "體育",
+      "weeklyHours": 2,
+      "teacherId": "T012",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "603-綜合",
+      "classId": "603",
+      "subject": "綜合",
+      "weeklyHours": 2,
+      "teacherId": "T030",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "603-藝(美)",
+      "classId": "603",
+      "subject": "藝(美)",
+      "weeklyHours": 2,
+      "teacherId": "T030",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "603-藝(音)",
+      "classId": "603",
+      "subject": "藝(音)",
+      "weeklyHours": 1,
+      "teacherId": "T023",
+      "requiresRoom": "音樂",
+      "lockedSlots": []
+    },
+    {
+      "id": "603-閱讀",
+      "classId": "603",
+      "subject": "閱讀",
+      "weeklyHours": 1,
+      "teacherId": "T030",
+      "requiresRoom": "圖書館",
+      "lockedSlots": []
+    },
+    {
+      "id": "603-本土",
+      "classId": "603",
+      "subject": "本土",
+      "weeklyHours": 1,
+      "teacherId": "T036",
+      "requiresRoom": null,
+      "lockedSlots": [
+        {
+          "day": 2,
+          "period": 4
+        }
+      ]
+    },
+    {
+      "id": "603-英文",
+      "classId": "603",
+      "subject": "英文",
+      "weeklyHours": 2,
+      "teacherId": "T009",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "603-校本",
+      "classId": "603",
+      "subject": "校本",
+      "weeklyHours": 3,
+      "teacherId": "T030",
+      "requiresRoom": null,
+      "lockedSlots": []
+    },
+    {
+      "id": "603-彈(英)",
+      "classId": "603",
+      "subject": "彈(英)",
+      "weeklyHours": 1,
+      "teacherId": "T009",
+      "requiresRoom": "英語",
+      "lockedSlots": []
+    },
+    {
+      "id": "603-彈(資)",
+      "classId": "603",
+      "subject": "彈(資)",
+      "weeklyHours": 2,
+      "teacherId": "T008",
+      "requiresRoom": "科技",
+      "lockedSlots": []
+    }
+  ],
+  "rooms": {
+    "自然A": {
+      "name": "自然教室A",
+      "limit": 1
+    },
+    "自然B": {
+      "name": "自然教室B",
+      "limit": 1
+    },
+    "音樂": {
+      "name": "音樂教室",
+      "limit": 1
+    },
+    "科技": {
+      "name": "科技教室",
+      "limit": 1
+    },
+    "圖書館": {
+      "name": "圖書館",
+      "limit": 1
+    },
+    "英語": {
+      "name": "英語教室",
+      "limit": 1
+    }
+  },
+  "schedule": null,
+  "engineSettings": {
+    "maxBacktracks": 50000,
+    "preferMorningCore": true,
+    "preferConsecutiveSpecial": true,
+    "maxSameSubjectPerDay": 2,
+    "maxTeacherWeeklyHours": 35,
+    "homeroomMinFreePeriods": 2,
+    "preferDirectorHalfDay": true
+  }
+}

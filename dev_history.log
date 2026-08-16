@@ -1,3 +1,104 @@
+## [2026-08-16 18:15:00] - 調整自動排課邏輯為四階段優先級管線（教師不可排課時段-->科目鎖定-->非導師的課-->導師課）
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 自動排課的邏輯要先以教師不可排課的時段優先-->科目鎖定-->非導師的課-->導師課
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   **明確劃分四階段優先級管線**：
+        1. **階段一：教師不可排課時段 (Busy Slots Priority & Pre-Checks)**：最優先考量教師設定之 `busySlots` 不可排課硬性限制，配合前置容量預檢 (0, 0b, 0c) 確保不可排課時段不被違規填入。
+        2. **階段二：科目鎖定 (Locked Subject Slots)**：次優先處理使用者在配課矩陣中設定之 `lockedSlots` 課程，在 DFS 回溯搜尋前優先預先填入課表矩陣中。
+        3. **階段三：非導師的課 (Non-Homeroom / Subject Teacher Courses)**：在未鎖定課程難度分排序中，將非班級導師（科任/兼任/主任/組長/鐘點）課程給予顯著的優先度權重加碼 (`+500`)，確保跨班共用、受限專科教室之科任課程優先在搜尋樹前段被排定。
+        4. **階段四：導師課 (Homeroom Teacher Courses)**：班級導師本班課程維持基本優先度，於科任課程排定後，彈性填補各班級剩餘的空時段。
+    *   **引擎日誌輸出**：於 `runScheduler` 啟動時明確輸出四階段優先級訊息與各門課難度分排序類型。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次調整四階段優先級排課邏輯歷程。
+    *   `[MODIFIED]` `scheduler.js`: 調整難度分加權以落實「非導師的課 > 導師課」之排序，並新增四階段排課管線 Console 日誌。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-16 14:54:00] - 調整課表檢視課程卡片顏色為雙色模式（導師藍色、非導師黃色）
+
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 課表檢視中的課程顏色改為兩種顯示：導師為藍色、非導師的課改為黃色
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   **變更色彩邏輯**：在 `app.js` 的課表渲染函式（`renderClassCell`、`renderTeacherCell`、`renderRoomCell`）中，將原本按科目種類進行 8 色輪替的色彩判定，改為按授課教師身份判定：
+        - 若授課教師為導師（`teacher.role === 'homeroom'`），課表卡片樣式套用 `subject-hue-blue`（藍色卡片）。
+        - 若授課教師為非導師（科任/主任/組長/鐘點），課表卡片樣式套用 `subject-hue-yellow`（黃色卡片）。
+    *   **更新圖例顯示 (`renderTimetableLegend`)**：圖例改為顯示「導師授課 (藍色)」、「科任 / 非導師授課 (黃色)」、固定鎖定時段與教師忙碌時段。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次課表卡片顏色改為導師藍/非導師黃雙色模式之歷程。
+    *   `[MODIFIED]` `app.js`: 修改 `renderClassCell`、`renderTeacherCell`、`renderRoomCell` 與 `renderTimetableLegend` 的顏色判定與圖例渲染。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-16 14:46:00] - 新增「年級導師每週至少連續兩堂共同不排課/備課會議」雙管齊下功能
+
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 每個年級每週都至少要有連續兩堂共同不排課時段
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   **雙管齊下機制**：
+        1. **引擎自動保障 (Engine Automation)**：在 `data.js` 的 `DEFAULT_ENGINE_SETTINGS` 新增 `preferGradeCommonFreeBlock: true` 與 `gradeMinCommonFreePeriods: 2`。排課時，引擎會自動為每個年級在全週適合的全天時段（如週二/週四第 5-6 節）預留至少連續 2 節導師共同空堂；若某年級已手動設定 busySlots 則尊重手動設定，若無則自動尋找最佳 2 節連堂並給予該年級科任課程候選分數獎勵 (`+300`)，自動集中排入科任課，進而讓該年級全體導師獲得連續 2 節共同空堂。
+        2. **手動一鍵工具 (UI Quick Batch Tool)**：在 `index.html` 的教師管理介面新增「年級導師共同不排課一鍵設定工具」，提供年級選單 (1-6年級)、星期選單 (一~五) 與連堂時段選單 (第5-6節、第2-3節、第3-4節、第6-7節、第1-2節)，按鈕支援「一鍵套用至該年級所有導師」與「一鍵清除」，並在 `app.js` 綁定批次更新 `state.teachers[].busySlots` 與 UI 刷新。
+    *   **驗證結果**：於 Node.js 環境實測，1至6年級在完全未手動勾選 busySlots 時，自動排課後 6 個年級 100% 全數成功獲得至少一組連續 2 節的導師共同空堂（耗時 0.051 秒、547 次回溯）；手動一鍵設定亦精準套用。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次新增年級導師共同不排課雙管齊下功能歷程。
+    *   `[MODIFIED]` `data.js`: `DEFAULT_ENGINE_SETTINGS` 新增 `preferGradeCommonFreeBlock` 與 `gradeMinCommonFreePeriods`。
+    *   `[MODIFIED]` `scheduler.js`: `runScheduler` 新增年級共同空堂自動保護遴選與候選時段加權引導。
+    *   `[MODIFIED]` `index.html`: 新增年級導師共同不排課一鍵工具面板，與引擎參數設定核取方塊。
+    *   `[MODIFIED]` `app.js`: 綁定年級導師共同不排課一鍵套用/清除事件邏輯，與引擎參數讀取保存。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-16 14:35:00] - 修復同年級導師共同設定不可排課時段時自動排課失敗的問題
+
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 同年級的導師需要有共同的不排課時間，我以五年級三個班為例，三位教師都設定週四下午不可排課，就會出現自動排課失敗
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   **原因診斷**：當同年級導師（如五年級 501、502、503 導師）設定共同不可排課時段（如週四下午 4-5, 4-6, 4-7）時，該時段必須 100% 由科任教師填補。然而原排課引擎：
+        1. **時段評分偏好 (Value Ordering)**：在排序科任課程的候選時段時，偏好早自習/上午或低負荷時段，使得科任課程優先填補週一至週三/五，而將週四下午留空。當演算法之後嘗試安排導師課程時，導師在週四下午為忙碌，導致無處可填，觸發 >500,000 次無效回溯的連鎖崩潰。
+        2. **難度排序未針對科任加權 (Variable Ordering)**：導師設有忙碌時段的班級，其科任課程具有極高的時段緊迫性，但原難度計算並未對這些科任課程提升難度分，導致其排在搜尋樹後方。
+        3. **缺乏實體不可能前置檢查 (Pre-Check 0c)**：當某時段導師共同忙碌需要的科任教師數量超出實際可用科任教師數時，未預先擋下。
+    *   **實作修復**：
+        1. **`getSortedSlotsForLesson` 與 `getSortedBlockSlots` 時段評分優化**：檢查候選時段 `(day, period)` 是否為該班級導師的忙碌時段；若是導師忙碌時段且當前課程為非導師（科任）課程，給予高額分數獎勵 (`+200`)，促使科任課程優先填滿導師忙碌空檔（如週四下午），不再將導師忙碌時段留空至最後。
+        2. **`runScheduler` 難度排序優化**：計算各班導師忙碌時段 `htBusyCount` 與年級導師 busy 疊加情況，對導師設有忙碌時段之班級的科任課程給予難度加碼 (`htBusyCount * 70`)，並對連排課程加碼 (`blockSize * 100`)，讓具強約束的課程優先被排定。
+        3. **前置檢查 0c (`Grade-Level Subject Capacity Pre-Check`)**：逐年級與時段檢測，若某年級於某時段有 $K$ 位導師設定忙碌，則檢查該年級可用科任教師數是否 $\ge K$；若否，立即中斷排課並顯示精確診斷訊息。
+    *   **驗證結果**：於本機 Node.js 環境實測 `智慧排課系統暫存紀錄_2026-08-16.json`（15個班級，五年級三個班導師皆設定週四下午忙碌），修復前耗盡 500,000 次上限失敗，修復後僅需 **0.027 秒**、**653 次回溯** 即成功排定全校課表；並確認實體不可能情境可精準攔截。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次修復同解年級導師共同不可排課時段自動排課失敗之歷程。
+    *   `[MODIFIED]` `scheduler.js`: 新增前置檢查 0c、優化 `runScheduler` 難度排序與 `getSortedSlotsForLesson`/`getSortedBlockSlots` 導師忙碌時段對科任課程之時段加權評分。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
+## [2026-08-16 14:20:00] - 安裝「教師配課規劃」外部 Skill，並修復多位教師設定不可排課時段時自動排課失敗過慢/訊息不明確的問題
+
+
+*   **使用者提示詞 / 需求 (User Prompt):**
+    > 請幫我安裝以下專案Skill：https://github.com/chunsheng612/teacher-course-assignment-skill 並且比對目前的內容
+    > 如果設定多位教師不可排課時段，會導致自動排課失敗
+
+*   **實作策略與動機 (Implementation Strategy):**
+    *   **安裝外部 Skill**：先以 GitHub API 取得完整檔案清單並逐檔下載（`SKILL.md`、`agents/openai.yaml`、`references/*.md`、`scripts/audit_schedule.py`），確認檔案大小與原始碼一致、Python 腳本語法檢查通過且僅使用標準函式庫、無網路或子行程呼叫等疑慮後，安裝至 `.claude/skills/plan-teacher-course-assignments/`。比對後確認此 Skill 是「文件導向、人機協作」的配課規劃方法論（讀取歷史 Word/Excel/PDF 配課文件、建立人員/班級/配課/決策四本帳、grill-me 逐題確認、JSON 帳本稽核），與本專案 `scheduler.js` 的全自動回溯排課演算法屬於解決不同問題的工具，兩者無直接整合，僅概念上部分可互相對照（如基本節數/已配節數）。
+    *   **診斷「多位教師設定不可排課時段導致自動排課失敗」**：以模擬腳本重現：教師配課節數 34 節（低於單週上限 35 節，因此能通過既有的扁平上限前置檢查），但另設定 10 個「不可排課時段」，使其實際可用時段僅剩 22 節，數學上已不可能排入。由於既有前置檢查未將「不可排課時段」納入考量，此情況會直接進入完整回溯搜尋，耗盡預設 50 萬次回溯上限才失敗（約 4 秒，且僅回報四點通用提示，未指出實際問題教師），實際校務資料（15 班、數百堂課）耗時可能更久且更難排查。
+    *   **修復**：在 `scheduler.js` 的前置檢查新增「扣除不可排課時段後之實際可用時段」計算：針對每位有設定 `busySlots` 的教師，逐一檢查其一週 35 個時段中，扣除本身不可排課時段、且至少有一門其配課班級在該時段可上課者，加總為實際可用時段數；若配課總節數超過此數，判定為實體不可能排課，直接中止並精確列出教師姓名、已配課節數、不可排課時段數與實際可用時段數。`isSlotAllowedForClass` 為函式宣告會被提升，故可在其文字定義之前呼叫。
+    *   已於本機以 Node 腳本驗證：（1）數學上不可能的情境，耗時由約 4155ms 降至 1ms，並精確指出問題教師與缺口節數；（2）多位教師皆有合理不可排課時段但仍可行的情境，排課依然成功（耗時 5ms），確認未產生誤判。
+
+*   **受影響檔案與變更 (Files Affected & Actions):**
+    *   `[CREATED]` `.claude/skills/plan-teacher-course-assignments/`：安裝外部教師配課規劃 Skill（SKILL.md、agents、references、scripts）。
+    *   `[MODIFIED]` `scheduler.js`: 前置檢查新增「不可排課時段」感知的教師可用時段容量檢查。
+    *   `[MODIFIED]` `dev_history.log`: 記錄本次 Skill 安裝比對與排課前置檢查修復歷程。
+
+*   **目前狀態 (Current Status):** 已完成 Completed
+
 ## [2026-08-13 18:35:00] - 教師「配課明細表」新增刪除已指派課程功能
 
 *   **使用者提示詞 / 需求 (User Prompt):**

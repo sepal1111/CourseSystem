@@ -12,6 +12,9 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
   const maxBacktracks = params.maxBacktracks || 500000;
   const preferMorningCore = params.preferMorningCore !== false;
   const preferConsecutiveSpecial = params.preferConsecutiveSpecial !== false;
+  const preferGradeCommonFreeBlock = params.preferGradeCommonFreeBlock !== false;
+  const gradeMinCommonFreePeriods = Number.isInteger(params.gradeMinCommonFreePeriods) && params.gradeMinCommonFreePeriods > 0
+    ? params.gradeMinCommonFreePeriods : 2;
   const roomsMap = params.rooms || SPECIAL_ROOMS;
   const subjectsList = params.subjects || [];
 
@@ -27,6 +30,11 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
 
   logCallback("===============================");
   logCallback(`[Engine] 啟動自動排課引擎...`);
+  logCallback(`[Engine] 執行四階段優先級排課管線：`);
+  logCallback(`  1. 階段一：教師不可排課時段 (優先限制與容量檢查)`);
+  logCallback(`  2. 階段二：科目鎖定 (優先鎖定固定時段課程)`);
+  logCallback(`  3. 階段三：非導師的課 (優先安排科任/專科/跨班課程)`);
+  logCallback(`  4. 階段四：導師課 (最後安排班級導師課程)`);
   logCallback(`[Engine] 總班級數: ${classes.length}，總教師數: ${teachers.length}`);
   const validAssignments = assignments.filter(a => Boolean(a.teacherId));
   logCallback(`[Engine] 待排課節數: ${validAssignments.reduce((sum, a) => sum + a.weeklyHours, 0)} 節 (排除未指派教師之科目)`);
@@ -39,6 +47,14 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
 
   const classMap = new Map();
   classes.forEach(c => classMap.set(c.id, c));
+
+  // Map each class to its homeroom teacher object for quick lookup
+  const classHomeroomTeacherMap = new Map();
+  teachers.forEach(t => {
+    if (t.role === 'homeroom' && t.targetClassId) {
+      classHomeroomTeacherMap.set(t.targetClassId, t);
+    }
+  });
 
   // Admin-configured per-subject scheduling behavior (from the "科目設定管理"
   // screen), keyed by `${grade}-${subjectName}` to match state.subjects' own
@@ -245,12 +261,128 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
     logCallback(`[Engine] ✅ 已成功鎖定 ${lockedLessons.length} 堂課程於固定時段。`);
   }
 
+  // Auto Grade Common Free Block Protection setup (每個年級每週至少連續兩堂導師共同不排課/備課會議)
+  const targetGradeCommonFreeSlots = new Map(); // gradeNum -> Set of "day-period"
+
+  if (preferGradeCommonFreeBlock && gradeMinCommonFreePeriods >= 2) {
+    const gradeClassesMap = new Map();
+    classes.forEach(c => {
+      if (!gradeClassesMap.has(c.grade)) gradeClassesMap.set(c.grade, []);
+      gradeClassesMap.get(c.grade).push(c);
+    });
+
+    gradeClassesMap.forEach((gClasses, gNum) => {
+      const gHomerooms = teachers.filter(t => t.role === 'homeroom' && gClasses.some(c => c.id === t.targetClassId));
+      if (gHomerooms.length === 0) return;
+
+      // Check if manual common busy block already exists for this grade
+      let alreadyHasManualBlock = false;
+      for (let day = 1; day <= 5; day++) {
+        for (let p = 1; p <= 7 - gradeMinCommonFreePeriods + 1; p++) {
+          if ((p <= 4 - gradeMinCommonFreePeriods + 1) || (p >= 5)) {
+            let isConsecutiveBusy = true;
+            for (let b = 0; b < gradeMinCommonFreePeriods; b++) {
+              const slotKey = `${day}-${p + b}`;
+              if (!gHomerooms.every(ht => ht.busySlots && ht.busySlots.includes(slotKey))) {
+                isConsecutiveBusy = false;
+                break;
+              }
+            }
+            if (isConsecutiveBusy) {
+              alreadyHasManualBlock = true;
+              break;
+            }
+          }
+        }
+        if (alreadyHasManualBlock) break;
+      }
+
+      if (!alreadyHasManualBlock) {
+        const candidateBlocks = [];
+        for (let day = 1; day <= 5; day++) {
+          for (let p = 1; p <= 6; p++) {
+            if ((p <= 3) || (p >= 5 && p <= 6)) {
+              let allActive = true;
+              for (let b = 0; b < gradeMinCommonFreePeriods; b++) {
+                if (!gClasses.every(c => isSlotAllowedForClass(c.id, day, p + b))) {
+                  allActive = false;
+                  break;
+                }
+              }
+              if (!allActive) continue;
+
+              const gAssignments = validAssignments.filter(a => gClasses.some(c => c.id === a.classId));
+              const gSubjectTeacherIds = new Set();
+              gAssignments.forEach(a => {
+                const ht = classHomeroomTeacherMap.get(a.classId);
+                if (!ht || ht.id !== a.teacherId) gSubjectTeacherIds.add(a.teacherId);
+              });
+
+              let availableCount = 0;
+              gSubjectTeacherIds.forEach(tId => {
+                const t = teacherMap.get(tId);
+                let freeInBlock = true;
+                for (let b = 0; b < gradeMinCommonFreePeriods; b++) {
+                  const slotKey = `${day}-${p + b}`;
+                  if (t && t.busySlots && t.busySlots.includes(slotKey)) freeInBlock = false;
+                }
+                if (freeInBlock) availableCount++;
+              });
+
+              if (availableCount >= gClasses.length) {
+                let blockScore = (p >= 5) ? 50 : 20;
+                if (day === 4) blockScore += 30;
+                else if (day === 2) blockScore += 20;
+                candidateBlocks.push({ day, period: p, score: blockScore });
+              }
+            }
+          }
+        }
+
+        if (candidateBlocks.length > 0) {
+          candidateBlocks.sort((a, b) => b.score - a.score);
+          const chosen = candidateBlocks[0];
+          const slotSet = new Set();
+          for (let b = 0; b < gradeMinCommonFreePeriods; b++) {
+            slotSet.add(`${chosen.day}-${chosen.period + b}`);
+          }
+          targetGradeCommonFreeSlots.set(gNum, slotSet);
+          logCallback(`[Engine] 💡 為 ${gNum}年級 自動保護導師共同備課/會議時段：週${chosen.day} 第${chosen.period}~${chosen.period + gradeMinCommonFreePeriods - 1}節。`);
+        }
+      }
+    });
+  }
+
+  // Pre-calculate grade-level homeroom busy slots count
+  const gradeHomeroomBusyMap = new Map();
+  classes.forEach(c => {
+    const ht = classHomeroomTeacherMap.get(c.id);
+    if (ht && ht.busySlots && ht.busySlots.length > 0) {
+      const current = gradeHomeroomBusyMap.get(c.grade) || 0;
+      gradeHomeroomBusyMap.set(c.grade, current + ht.busySlots.length);
+    }
+  });
+
   // 4. Sort variables (lessons) based on heuristics (MRV & constraint weight)
   // We want to schedule the hardest lessons first to avoid backtracking late.
+  // Enforces 4-Tier Pipeline: Non-homeroom teacher courses (Tier 3) > Homeroom teacher courses (Tier 4).
   freeLessons.forEach(lesson => {
     const t = teacherMap.get(lesson.teacherId);
     const c = classMap.get(lesson.classId);
+    const ht = classHomeroomTeacherMap.get(lesson.classId);
     let difficulty = 0;
+
+    const isHomeroomOfThisClass = ht && ht.id === lesson.teacherId;
+
+    // Tier 3 Priority: Non-homeroom teacher courses (科任/兼任/主任/組長) have higher priority to be scheduled early
+    if (!isHomeroomOfThisClass) {
+      difficulty += 500;
+    }
+
+    // Consecutive Block lessons are much harder to place
+    if (lesson.groupRole === 'double') {
+      difficulty += (lesson.blockSize || 2) * 100;
+    }
 
     // A: Special room requirements (high risk of conflict)
     if (lesson.requiresRoom) {
@@ -280,6 +412,29 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
       }
     }
 
+    // Class homeroom teacher's busy slots increase urgency of subject lessons for this class
+    if (ht && ht.busySlots && ht.busySlots.length > 0) {
+      const htBusyCount = ht.busySlots.length;
+      if (!isHomeroomOfThisClass) {
+        // Subject teacher lesson for a class whose homeroom teacher is busy
+        difficulty += htBusyCount * 70;
+      } else {
+        // Homeroom teacher's own lesson has fewer available slots
+        difficulty += htBusyCount * 50;
+      }
+    }
+
+    if (c && targetGradeCommonFreeSlots.has(c.grade)) {
+      if (!isHomeroomOfThisClass) {
+        difficulty += 120; // Prioritize subject lessons for grades with auto common free block
+      }
+    }
+
+    // Grade-level shared homeroom busy penalty
+    if (c && gradeHomeroomBusyMap.has(c.grade)) {
+      difficulty += gradeHomeroomBusyMap.get(c.grade) * 20;
+    }
+
     // D: Special subjects (Computer, Science, Music, Art)
     if (["自然", "美勞", "電腦", "音樂", "藝(音)", "藝(美)", "彈(資)", "彈(英)", "英文", "科技"].includes(lesson.subject)) {
       difficulty += 30;
@@ -293,7 +448,10 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
 
   logCallback(`[Engine] 排序完成。最難排的前 5 門課：`);
   freeLessons.slice(0, 5).forEach((l, i) => {
-    logCallback(`  ${i+1}. 班級 ${l.classId} - 科目 ${l.subject} - 教師 ${teacherMap.get(l.teacherId)?.name} (難度得分: ${l.difficulty.toFixed(0)})`);
+    const t = teacherMap.get(l.teacherId);
+    const ht = classHomeroomTeacherMap.get(l.classId);
+    const isHomeroom = ht && ht.id === l.teacherId;
+    logCallback(`  ${i+1}. 班級 ${l.classId} - 科目 ${l.subject} - 教師 ${t?.name} [${isHomeroom ? '導師課' : '非導師課'}] (難度得分: ${l.difficulty.toFixed(0)})`);
   });
 
   // 0. Physical Impossibility Pre-Check: Teacher hours > 35
@@ -320,6 +478,119 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
       logCallback(`  - 教師: ${t.name} (已被指派 ${t.assigned} 節 / 每週上限 ${maxTeacherWeeklyHours} 節)`);
     });
     logCallback(`[Engine] 💡 提示：單一教師無法在同一時段同時於兩個班級上課。請前往「線上互動配課」，將部份班級科目分散指派給其他兼任/鐘點教師。`);
+    return null;
+  }
+
+  // 0b. Physical Impossibility Pre-Check: teacher's assigned hours exceed the
+  // number of slots actually usable once their own「不可排課時段」and their
+  // assigned classes' half-day/full-day patterns are taken into account.
+  // Without this, a teacher over-booked relative to their real availability
+  // (e.g. several busy slots stacked on top of a near-full course load)
+  // silently burns through the entire backtrack budget before failing with
+  // a generic message - this catches it immediately and names the teacher.
+  // `isSlotAllowedForClass` below is a hoisted function declaration, so it's
+  // safe to call here ahead of its textual definition.
+  const teacherAssignedClassIds = {};
+  validAssignments.forEach(assign => {
+    if (!teacherAssignedClassIds[assign.teacherId]) teacherAssignedClassIds[assign.teacherId] = new Set();
+    teacherAssignedClassIds[assign.teacherId].add(assign.classId);
+  });
+
+  const capacityShortfalls = [];
+  Object.keys(teacherTotalHours).forEach(tId => {
+    const tObj = teacherMap.get(tId);
+    const busySlotSet = new Set((tObj && tObj.busySlots) || []);
+    if (busySlotSet.size === 0) return; // No busy slots - flat cap above already covers this teacher.
+
+    const assignedClassIds = Array.from(teacherAssignedClassIds[tId] || []);
+    let availableSlots = 0;
+    for (let day = 1; day <= 5; day++) {
+      for (let period = 1; period <= 7; period++) {
+        if (busySlotSet.has(`${day}-${period}`)) continue;
+        if (assignedClassIds.some(cId => isSlotAllowedForClass(cId, day, period))) availableSlots++;
+      }
+    }
+
+    if (teacherTotalHours[tId] > availableSlots) {
+      capacityShortfalls.push({
+        name: tObj ? tObj.name : tId,
+        assigned: teacherTotalHours[tId],
+        available: availableSlots,
+        busyCount: busySlotSet.size
+      });
+    }
+  });
+
+  if (capacityShortfalls.length > 0) {
+    logCallback(`[Engine] ❌ 發現實體不可能排課條件！以下教師扣除「不可排課時段」後的實際可用時段數，不足以容納其已配課節數：`);
+    capacityShortfalls.forEach(t => {
+      logCallback(`  - 教師: ${t.name} (已配課 ${t.assigned} 節／設定 ${t.busyCount} 個不可排課時段後，實際僅剩 ${t.available} 個可用時段)`);
+    });
+    logCallback(`[Engine] 💡 提示：請減少上述教師的「不可排課時段」設定，或將部份課程改指派給其他教師，再重新執行自動排課。`);
+    return null;
+  }
+
+  // 0c. Grade-Level Subject Capacity Pre-Check:
+  // If in a single active slot (day-period), K classes of a grade all have homeroom teachers busy,
+  // then K distinct non-homeroom teachers are REQUIRED in that slot for that grade.
+  // Check if at least K subject teachers exist for that grade who are not busy in that slot.
+  const gradeClassesMap = new Map();
+  classes.forEach(c => {
+    if (!gradeClassesMap.has(c.grade)) gradeClassesMap.set(c.grade, []);
+    gradeClassesMap.get(c.grade).push(c);
+  });
+
+  const slotCapacityConflicts = [];
+  gradeClassesMap.forEach((gClasses, gNum) => {
+    for (let day = 1; day <= 5; day++) {
+      for (let period = 1; period <= 7; period++) {
+        const slotKey = `${day}-${period}`;
+        // Count how many classes in this grade have active slot AND homeroom teacher busy
+        const busyHomeroomClasses = gClasses.filter(c => {
+          if (!isSlotAllowedForClass(c.id, day, period)) return false;
+          const ht = classHomeroomTeacherMap.get(c.id);
+          return ht && ht.busySlots && ht.busySlots.includes(slotKey);
+        });
+
+        const K = busyHomeroomClasses.length;
+        if (K > 0) {
+          // Find all available subject teachers for this grade in this slot
+          const gAssignments = validAssignments.filter(a => gClasses.some(c => c.id === a.classId));
+          const gSubjectTeacherIds = new Set();
+          gAssignments.forEach(a => {
+            const ht = classHomeroomTeacherMap.get(a.classId);
+            if (!ht || ht.id !== a.teacherId) {
+              gSubjectTeacherIds.add(a.teacherId);
+            }
+          });
+
+          // Filter available (not busy) subject teachers in slotKey
+          const availableSubjectTeachers = Array.from(gSubjectTeacherIds).filter(tId => {
+            const t = teacherMap.get(tId);
+            return !t || !t.busySlots.includes(slotKey);
+          });
+
+          if (availableSubjectTeachers.length < K) {
+            slotCapacityConflicts.push({
+              grade: gNum,
+              day,
+              period,
+              needed: K,
+              available: availableSubjectTeachers.length,
+              classes: busyHomeroomClasses.map(c => c.id)
+            });
+          }
+        }
+      }
+    }
+  });
+
+  if (slotCapacityConflicts.length > 0) {
+    logCallback(`[Engine] ❌ 發現實體不可能排課條件！同年級導師共同設定不可排課時段時，科任教師數量不足：`);
+    slotCapacityConflicts.forEach(conf => {
+      logCallback(`  - ${conf.grade}年級 (班級: ${conf.classes.join(', ')}) 於 週${conf.day} 第${conf.period} 節有 ${conf.needed} 位導師設定不可排課，需要 ${conf.needed} 位科任教師同時授課，但該時段僅有 ${conf.available} 位可用的科任教師！`);
+    });
+    logCallback(`[Engine] 💡 提示：請減少同年級導師的共同「不可排課時段」，或增加該年級的科任教師安排，再重新執行自動排課。`);
     return null;
   }
 
@@ -481,6 +752,10 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
     }
 
     // Light heuristic: avoid piling onto a day where this teacher is already heavily loaded.
+    const ht = classHomeroomTeacherMap.get(lesson.classId);
+    const cls = classMap.get(lesson.classId);
+    const targetSlots = cls ? targetGradeCommonFreeSlots.get(cls.grade) : null;
+
     candidates.forEach(cand => {
       let score = 0;
       let teacherLoadOnDay = 0;
@@ -488,6 +763,24 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
         if (teacherSchedule[lesson.teacherId][cand.day][p] !== null) teacherLoadOnDay++;
       }
       if (teacherLoadOnDay >= 4) score -= 20;
+
+      // Bonus if class homeroom teacher is busy on block periods (subject block lesson should prioritize these mandatory subject slots)
+      if (ht && ht.busySlots && lesson.teacherId !== ht.id) {
+        for (let b = 0; b < blockSize; b++) {
+          if (ht.busySlots.includes(`${cand.day}-${cand.period + b}`)) {
+            score += 150;
+          }
+        }
+      }
+
+      if (targetSlots && lesson.teacherId !== ht?.id) {
+        for (let b = 0; b < blockSize; b++) {
+          if (targetSlots.has(`${cand.day}-${cand.period + b}`)) {
+            score += 150;
+          }
+        }
+      }
+
       cand.score = score;
     });
 
@@ -500,6 +793,9 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
   function getSortedSlotsForLesson(lesson) {
     const candidates = [];
     const t = teacherMap.get(lesson.teacherId);
+    const ht = classHomeroomTeacherMap.get(lesson.classId);
+    const cls = classMap.get(lesson.classId);
+    const targetSlots = cls ? targetGradeCommonFreeSlots.get(cls.grade) : null;
 
     for (let day = 1; day <= 5; day++) {
       for (let period = 1; period <= 7; period++) {
@@ -519,6 +815,16 @@ export function runScheduler(teachers, classes, assignments, params = {}, logCal
     candidates.forEach(cand => {
       let score = 0;
       const { day, period } = cand;
+
+      // Key Heuristic Fix: If class homeroom teacher is busy at (day, period), this slot MUST be filled by a subject teacher for this class!
+      // Give subject teacher lessons for this class a strong score bonus (+200) so they claim homeroom-busy slots early.
+      if (ht && ht.busySlots && ht.busySlots.includes(`${day}-${period}`) && lesson.teacherId !== ht.id) {
+        score += 200;
+      }
+
+      if (targetSlots && targetSlots.has(`${day}-${period}`) && lesson.teacherId !== ht?.id) {
+        score += 300;
+      }
 
       // H1: Prefer morning slots (periods 1-3) for core subjects (Math, Chinese, English)
       if (preferMorningCore && ["國語", "數學", "英語"].includes(lesson.subject)) {
